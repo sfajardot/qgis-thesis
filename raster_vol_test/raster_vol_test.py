@@ -21,10 +21,13 @@
  *                                                                         *
  ***************************************************************************/
 """
+import os
+import sys
+
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
-from qgis.core import QgsProject, Qgis,  QgsMessageLog 
+from qgis.core import QgsProject, Qgis,  QgsMessageLog, QgsPrintLayout, QgsSingleBandPseudoColorRenderer, QgsRasterShader
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.utils import iface
 
@@ -33,7 +36,8 @@ from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from .resources import *
 # Import the code for the dialog
 from .raster_vol_test_dialog import RasterTesterDialog
-import os.path
+
+from .layout_functions import *
 
 
 class RasterTester:
@@ -210,7 +214,6 @@ class RasterTester:
             QgsMessageLog.logMessage('Task started ', 'vol test', Qgis.Info)
             #Declare name of output file from text in output box.
             outputFilename = self.dlg.lnOutput.text()
-
             #Get the first raster layer (older year)
             oldRasterName = self.dlg.cmbOld.currentText()
             #If there is more than one layer named the same it creates a list
@@ -221,32 +224,36 @@ class RasterTester:
             #If there is more than one layer named the same it creates a list
             newRaster = QgsProject.instance().mapLayersByName(newRasterName)
             QgsMessageLog.logMessage(f"Layer 2 {newRasterName} loaded ", 'vol test', Qgis.Info)
+            #Check CRS
+            context = QgsProject.instance().transformContext()
+            oldCrs = oldRaster[0].crs()
+
 
             #sets up layer references
             oldRasterRef = QgsRasterCalculatorEntry()
-            #validates it is not a null value
-            if not oldRasterRef:
-                QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
-                QgsMessageLog.logMessage(f"Layer 1 {oldRasterName} missing, cancelling process ", 'vol test', Qgis.Info)
-                return 
+            #validates it is not a null value NEED TO TEST
+            #if not oldRasterRef:
+            #    QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
+            #    QgsMessageLog.logMessage(f"Layer 1 {oldRasterName} missing, cancelling process ", 'vol test', Qgis.Info)
+            #    return 
             #In case there are 2 layers named the same, it grabs the first one
             oldRasterRef.raster=oldRaster[0]
             oldRasterRef.bandNumber = 1
+            oldRasterRef.crs = oldRaster[0].crs
             #The @1 is required for the formulaString
             oldRasterRef.ref = "oldRaster@1"
             #Repeat for new Raster
-            newRasterRef = QgsRasterCalculatorEntry()
-            #validates it is not a null value
-            if not newRasterRef:
-                QMessageBox.critical(self.dlg, "Missing layer", f"{newRasterName} missing")
-                QgsMessageLog.logMessage(f"Layer 2 {newRasterName} missing, cancelling process ", 'vol test', Qgis.Info)
-                return
+            #validates it is not a null value NEED TO TEST
+            #if not newRasterRef:
+            #    QMessageBox.critical(self.dlg, "Missing layer", f"{newRasterName} missing")
+            #    QgsMessageLog.logMessage(f"Layer 2 {newRasterName} missing, cancelling process ", 'vol test', Qgis.Info)
+            #    return
             newRasterRef=QgsRasterCalculatorEntry()
             #In case there are 2 layers named the same, it grabs the first one
             newRasterRef.raster=newRaster[0]
             newRasterRef.bandNumber = 1
+            newRasterRef.crs = newRaster[0].crs
             newRasterRef.ref = "newRaster@1"
-
             #Uses QgsRasterCalculator: https://api.qgis.org/api/classQgsRasterCalculator.html#abd4932102407a12b53036588893fa2cc
 
             #define entries for QgsRasterCalculator
@@ -257,10 +264,62 @@ class RasterTester:
             formulaString = newRasterRef.ref + ' - ' + oldRasterRef.ref
             #Need to verify requirements with team. In this case, 
             # the operation is done with oldRaster's extent, cell width and height.
-            differenceRaster = QgsRasterCalculator(formulaString, outputFilename, "GTiff", oldRaster[0].extent(), oldRaster[0].width(), oldRaster[0].height(), entries)
+            differenceRaster = QgsRasterCalculator(formulaString,\
+                                                    outputFilename,\
+                                                    "GTiff",\
+                                                    oldRaster[0].extent(),\
+                                                    oldCrs,\
+                                                    oldRaster[0].width(), \
+                                                    oldRaster[0].height(),\
+                                                    entries,\
+                                                    context)
             QgsMessageLog.logMessage("Raster Calculation loaded", 'vol test', Qgis.Info)
             #Run calculation
             differenceRaster.processCalculation()
             QgsMessageLog.logMessage("Raster Calculation finished succesfully", 'vol test', Qgis.Info)
-            rLayerDifference = iface.addRasterLayer(outputFilename, "ElevationChange")
+            iface.addRasterLayer(outputFilename, os.path.basename(outputFilename))
+            rasterDiff = QgsProject.instance().mapLayersByName(os.path.basename(outputFilename))
 
+
+            #If layout is desired proceed to create layout
+            if self.dlg.chkLayout.isChecked():
+                QgsMessageLog.logMessage("Layout is Checked", 'vol test', Qgis.Info)
+                #The extent of the layput is the old Year Raster
+                extent = oldRaster[0].extent()
+                map_width = extent.xMaximum() - extent.xMinimum()
+                map_height = extent.yMaximum() - extent.yMinimum()
+                if (map_height==0) or (map_width==0):
+                    QgsMessageLog.logMessage("No loaded data - aborting", 'vol test', Qgis.Info)
+                    return
+
+
+                try:
+                    layout, manager = create_layout(self, "Test1")
+                except:
+                    # Quick and dirty. In case people decide not to replace previous layout
+                    QgsMessageLog.logMessage("Cancelled", 'vol test', Qgis.Info)
+                    return
+                
+                # Determine and set best layout orientation
+                landscape, layout_height, layout_width,\
+                      map_height, map_width, \
+                        scale_ratio = determine_orientation(self, \
+                                                            extent, layout)
+
+                # Calculate scale
+                map_height, map_width, my_map = determine_scale(self, landscape, \
+                                                                layout, layout_height, layout_width,\
+                                                                    map_height, map_width, scale_ratio)
+
+                # Add map
+                add_map(self, extent, layout, layout_height, \
+                        layout_width, map_height, map_width, 10, my_map)
+                
+                #provider=rasterDiff[0].dataProvider()
+                #sha = QgsRasterShader()
+                #pseudoRenderer = QgsSingleBandPseudoColorRenderer(provider, rasterDiff[0].type(),sha)                                         
+                #rasterDiff[0].setRenderer(pseudoRenderer) 
+                #rasterDiff[0].triggerRepaint()
+
+                manager.addLayout(layout)
+                self.iface.openLayoutDesigner(layout)
