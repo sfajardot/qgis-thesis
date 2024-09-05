@@ -32,12 +32,15 @@ from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.utils import iface
 
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
+
+import csv
+
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .raster_vol_test_dialog import RasterTesterDialog
-
-from .layout_functions import *
+#Import layout functions created by developer
+from .functions import *
 
 
 class RasterTester:
@@ -193,7 +196,12 @@ class RasterTester:
         filename, _filter = QFileDialog.getSaveFileName(  
             self.dlg, "Select output filename and destination",FileName, 'GeoTIFF(*.tif)')  
         self.dlg.lnOutput.setText(filename)  
-
+    def select_output_file_stats(self):  
+        
+        FileName = 'RasterStatistics'
+        filename, _filter = QFileDialog.getSaveFileName(  
+            self.dlg, "Select output filename and destination",FileName, 'csv(*.csv)')  
+        self.dlg.lnOutputStats.setText(filename)  
 
     def run(self):
         """Run method that performs all the real work"""
@@ -203,12 +211,14 @@ class RasterTester:
         if self.first_start == True:
             self.first_start = False
             self.dlg = RasterTesterDialog()
-            self.dlg.btnOutput.clicked.connect(self.select_output_file)  
+            self.dlg.btnOutput.clicked.connect(self.select_output_file) 
+            self.dlg.btnOutputStats.clicked.connect(self.select_output_file_stats)  
 
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
         result = self.dlg.exec_()
+
         # See if OK was pressed
         if result:
             QgsMessageLog.logMessage('Task started ', 'vol test', Qgis.Info)
@@ -218,44 +228,59 @@ class RasterTester:
             oldRasterName = self.dlg.cmbOld.currentText()
             #If there is more than one layer named the same it creates a list
             oldRaster = QgsProject.instance().mapLayersByName(oldRasterName)
+            # Verify at least one layer is opened
+            if not oldRaster:
+                QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
+                QgsMessageLog.logMessage(f"Layer 1 {oldRasterName} missing, cancelling process ", 'vol test', Qgis.Info)
+                return 
             QgsMessageLog.logMessage(f"Layer 1 {oldRasterName} loaded ", 'vol test', Qgis.Info)
+
+
             #Get the second raster layer (recent year)
             newRasterName = self.dlg.cmbNew.currentText()
             #If there is more than one layer named the same it creates a list
             newRaster = QgsProject.instance().mapLayersByName(newRasterName)
+            # Verify at least one layer is opened
+            if not oldRaster:
+                QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
+                QgsMessageLog.logMessage(f"Layer 1 {oldRasterName} missing, cancelling process ", 'vol test', Qgis.Info)
+                return 
             QgsMessageLog.logMessage(f"Layer 2 {newRasterName} loaded ", 'vol test', Qgis.Info)
+
+
             #Check CRS
+            if newRaster[0].crs() != oldRaster[0].crs():
+                reply = QMessageBox.question(None, self.tr('CRS does not match...'), \
+                                             self.tr("The Layers are in different CRS, still want to continue?"),\
+                                                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                if reply == QMessageBox.No:
+                    return
+
+            #Get context and CRS
             context = QgsProject.instance().transformContext()
             oldCrs = oldRaster[0].crs()
 
 
             #sets up layer references
             oldRasterRef = QgsRasterCalculatorEntry()
-            #validates it is not a null value NEED TO TEST
-            #if not oldRasterRef:
-            #    QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
-            #    QgsMessageLog.logMessage(f"Layer 1 {oldRasterName} missing, cancelling process ", 'vol test', Qgis.Info)
-            #    return 
             #In case there are 2 layers named the same, it grabs the first one
             oldRasterRef.raster=oldRaster[0]
             oldRasterRef.bandNumber = 1
             oldRasterRef.crs = oldRaster[0].crs
             #The @1 is required for the formulaString
             oldRasterRef.ref = "oldRaster@1"
+            
+            
             #Repeat for new Raster
-            #validates it is not a null value NEED TO TEST
-            #if not newRasterRef:
-            #    QMessageBox.critical(self.dlg, "Missing layer", f"{newRasterName} missing")
-            #    QgsMessageLog.logMessage(f"Layer 2 {newRasterName} missing, cancelling process ", 'vol test', Qgis.Info)
-            #    return
             newRasterRef=QgsRasterCalculatorEntry()
             #In case there are 2 layers named the same, it grabs the first one
             newRasterRef.raster=newRaster[0]
             newRasterRef.bandNumber = 1
             newRasterRef.crs = newRaster[0].crs
             newRasterRef.ref = "newRaster@1"
-            #Uses QgsRasterCalculator: https://api.qgis.org/api/classQgsRasterCalculator.html#abd4932102407a12b53036588893fa2cc
 
+
+            #Uses QgsRasterCalculator: https://api.qgis.org/api/classQgsRasterCalculator.html#abd4932102407a12b53036588893fa2cc
             #define entries for QgsRasterCalculator
             entries = []
             entries.append(newRasterRef)
@@ -277,49 +302,42 @@ class RasterTester:
             #Run calculation
             differenceRaster.processCalculation()
             QgsMessageLog.logMessage("Raster Calculation finished succesfully", 'vol test', Qgis.Info)
-            iface.addRasterLayer(outputFilename, os.path.basename(outputFilename))
-            rasterDiff = QgsProject.instance().mapLayersByName(os.path.basename(outputFilename))
+            rName = os.path.splitext(os.path.basename(outputFilename))[0]
+            iface.addRasterLayer(outputFilename, rName)
+
+            rasterDiff = QgsProject.instance().mapLayersByName(rName)
+            stats = rasterDiff[0].dataProvider().bandStatistics(1, QgsRasterBandStats.All)
+            totalDiff = stats.sum
+            VolChange = totalDiff*0.2*0.2
+            print(VolChange/1000000)
 
 
             #If layout is desired proceed to create layout
             if self.dlg.chkLayout.isChecked():
+                layoutName = os.path.splitext(os.path.basename(outputFilename))[0]
                 QgsMessageLog.logMessage("Layout is Checked", 'vol test', Qgis.Info)
-                #The extent of the layput is the old Year Raster
                 extent = oldRaster[0].extent()
-                map_width = extent.xMaximum() - extent.xMinimum()
-                map_height = extent.yMaximum() - extent.yMinimum()
-                if (map_height==0) or (map_width==0):
-                    QgsMessageLog.logMessage("No loaded data - aborting", 'vol test', Qgis.Info)
-                    return
+                run_layout(self, extent, layoutName)
+                #raster_symbology(rasterDiff[0])
+                QgsMessageLog.logMessage("Layout Created", 'vol test', Qgis.Info)
 
-
-                try:
-                    layout, manager = create_layout(self, "Test1")
-                except:
-                    # Quick and dirty. In case people decide not to replace previous layout
-                    QgsMessageLog.logMessage("Cancelled", 'vol test', Qgis.Info)
-                    return
-                
-                # Determine and set best layout orientation
-                landscape, layout_height, layout_width,\
-                      map_height, map_width, \
-                        scale_ratio = determine_orientation(self, \
-                                                            extent, layout)
-
-                # Calculate scale
-                map_height, map_width, my_map = determine_scale(self, landscape, \
-                                                                layout, layout_height, layout_width,\
-                                                                    map_height, map_width, scale_ratio)
-
-                # Add map
-                add_map(self, extent, layout, layout_height, \
-                        layout_width, map_height, map_width, 10, my_map)
-                
-                #provider=rasterDiff[0].dataProvider()
-                #sha = QgsRasterShader()
-                #pseudoRenderer = QgsSingleBandPseudoColorRenderer(provider, rasterDiff[0].type(),sha)                                         
-                #rasterDiff[0].setRenderer(pseudoRenderer) 
-                #rasterDiff[0].triggerRepaint()
-
-                manager.addLayout(layout)
-                self.iface.openLayoutDesigner(layout)
+            #If Save Stats is checked, proceed to create csv    
+            if self.dlg.chkStats.isChecked():
+                QgsMessageLog.logMessage("GetStatistics is Checked", 'vol test', Qgis.Info)
+                outputFilenameStats = self.dlg.lnOutputStats.text()
+                fieldnames = ['Statistic', 'Value']
+                dict_data = [{'Statistic': 'Band_Number', 'Value': stats.bandNumber},\
+                             {'Statistic': 'Mean', 'Value': stats.mean},\
+                             {'Statistic': 'Std_Dev', 'Value': stats.stdDev},\
+                             {'Statistic': 'Sum', 'Value': stats.sum},\
+                             {'Statistic': 'Sum_of_Squares', 'Value': stats.sumOfSquares},\
+                             {'Statistic': 'Minimum', 'Value': stats.minimumValue},\
+                             {'Statistic': 'Maximum', 'Value': stats.maximumValue},\
+                             {'Statistic': 'Range', 'Value': stats.range}]
+                with open(outputFilenameStats, 'w') as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames)
+                    writer.writeheader()
+                    for data in dict_data:
+                        writer.writerow(data)
+                QgsMessageLog.logMessage("Statistics Exported", 'vol test', Qgis.Info)
+            QgsMessageLog.logMessage("End of Processes", 'vol test', Qgis.Info)
