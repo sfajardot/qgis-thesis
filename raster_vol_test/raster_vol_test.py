@@ -21,6 +21,10 @@
  *                                                                         *
  ***************************************************************************/
 """
+
+# ADD SELECTED BOUNDING BOX
+# PlugIn in a second label to customize final report
+
 import os
 import sys
 
