@@ -185,7 +185,24 @@ class RasterTester:
         # will be set False in run()
         self.first_start = True
 
-
+    def enable_bounding_box(self):
+        if self.dlg.chkBB.isChecked():
+            self.dlg.cmbBB.setEnabled(True)
+            self.dlg.cmbBB.repaint()
+        else:
+            self.dlg.cmbBB.setDisabled(True)
+            self.dlg.cmbBB.repaint()
+    def enable_stats_box(self):
+        if self.dlg.chkStats.isChecked():
+            self.dlg.lnOutputStats.setEnabled(True)
+            self.dlg.lnOutputStats.repaint()
+            self.dlg.btnOutputStats.setEnabled(True)
+            self.dlg.btnOutputStats.repaint()
+        else:
+            self.dlg.lnOutputStats.setDisabled(True)
+            self.dlg.lnOutputStats.repaint()
+            self.dlg.btnOutputStats.setDisabled(True)
+            self.dlg.btnOutputStats.repaint()
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
@@ -236,9 +253,12 @@ class RasterTester:
 
             self.dlg.btnLayout.accepted.connect(self.report_layout)
             self.dlg.btnLayout.rejected.connect(self.close_dialog) 
+            
              
 
         # show the dialog
+        self.dlg.chkBB.clicked.connect(self.enable_bounding_box)
+        self.dlg.chkStats.clicked.connect(self.enable_stats_box)
         self.dlg.show()
         result = self.dlg.exec_()
         if result:

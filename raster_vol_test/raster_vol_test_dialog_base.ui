@@ -144,6 +144,9 @@
      </property>
     </widget>
     <widget class="QLineEdit" name="lnOutputStats">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -160,6 +163,9 @@
      </property>
     </widget>
     <widget class="QToolButton" name="btnOutputStats">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
      <property name="geometry">
       <rect>
        <x>230</x>
@@ -202,6 +208,9 @@
      </property>
     </widget>
     <widget class="QgsMapLayerComboBox" name="cmbBB">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
      <property name="geometry">
       <rect>
        <x>310</x>
