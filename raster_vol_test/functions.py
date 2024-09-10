@@ -3,10 +3,11 @@ import csv
 from qgis.PyQt.QtGui import QColor
 from qgis.core import Qgis, QgsProject, QgsPrintLayout, QgsMessageLog, QgsLayoutItemMap, QgsLayoutPoint, \
      QgsUnitTypes, QgsApplication, QgsLayoutItemPage, QgsRasterBandStats, QgsColorRampShader,\
-     QgsRasterShader, QgsSingleBandPseudoColorRenderer
+     QgsRasterShader, QgsSingleBandPseudoColorRenderer, QgsProcessing, QgsRasterLayer
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.utils import iface
 from PyQt5.QtWidgets import  QMessageBox
+from qgis import processing
 
 def create_layout(self, layout_name):
     """
@@ -190,6 +191,22 @@ def raster_symbology(rlayer):
      renderer = QgsSingleBandPseudoColorRenderer(rlayer.dataProvider(), 1, shader)
      rlayer.setRenderer(renderer)
 
+def clip_raster(rLayer, bBox):
+     parameters = {'INPUT': rLayer,
+            'MASK': bBox,
+            'NODATA': -9999,
+            'ALPHA_BAND': False,
+            'CROP_TO_CUTLINE': True,
+            'KEEP_RESOLUTION': True,
+            'OPTIONS': None,
+            'DATA_TYPE': 0,
+            'SOURCE_CRS': 'ProjectCrs',
+            'TARGET_CRS': 'ProjectCrs',
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT}
+     clip = processing.run('gdal:cliprasterbymasklayer', parameters)
+     clipRaster = QgsRasterLayer(clip['OUTPUT'])
+     return clipRaster
+
 def elevation_change(self):
     QgsMessageLog.logMessage('Processing task started ', 'vol test', Qgis.Info)
     #Declare name of output file from text in output box.
@@ -197,7 +214,7 @@ def elevation_change(self):
     #Get the first raster layer (older year)
     oldRasterName = self.dlg.cmbOld.currentText()
     #If there is more than one layer named the same it creates a list
-    oldRaster = QgsProject.instance().mapLayersByName(oldRasterName)
+    oldRaster = QgsProject.instance().mapLayersByName(oldRasterName)[0]
     # Verify at least one layer is opened
     if not oldRaster:
         QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
@@ -209,7 +226,7 @@ def elevation_change(self):
     #Get the second raster layer (recent year)
     newRasterName = self.dlg.cmbNew.currentText()
     #If there is more than one layer named the same it creates a list
-    newRaster = QgsProject.instance().mapLayersByName(newRasterName)
+    newRaster = QgsProject.instance().mapLayersByName(newRasterName)[0]
     # Verify at least one layer is opened
     if not oldRaster:
         QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
@@ -219,24 +236,36 @@ def elevation_change(self):
 
 
     #Check CRS
-    if newRaster[0].crs() != oldRaster[0].crs():
+    if newRaster.crs() != oldRaster.crs():
         reply = QMessageBox.question(None, self.tr('CRS does not match...'), \
                                         self.tr("The Layers are in different CRS, still want to continue?"),\
                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.No:
             return
+    #If layout is desired proceed to create layout
+    if self.dlg.chkBB.isChecked():
+        boundingBoxName = self.dlg.cmbBB.currentText()
+        #If there is more than one layer named the same it creates a list so grab the first one
+        boundingBox = QgsProject.instance().mapLayersByName(boundingBoxName)[0]
+        newRaster = clip_raster(newRaster, boundingBox)
+        QgsMessageLog.logMessage(f"CRS {newRaster.crs()}", 'vol test', Qgis.Info)
+        oldRaster = clip_raster(oldRaster, boundingBox)
 
+
+         
+   
+   
     #Get context and CRS
     context = QgsProject.instance().transformContext()
-    oldCrs = oldRaster[0].crs()
+    oldCrs = oldRaster.crs()
 
 
     #sets up layer references
     oldRasterRef = QgsRasterCalculatorEntry()
     #In case there are 2 layers named the same, it grabs the first one
-    oldRasterRef.raster=oldRaster[0]
+    oldRasterRef.raster=oldRaster
     oldRasterRef.bandNumber = 1
-    oldRasterRef.crs = oldRaster[0].crs
+    oldRasterRef.crs = oldRaster.crs
     #The @1 is required for the formulaString
     oldRasterRef.ref = "oldRaster@1"
     
@@ -244,9 +273,9 @@ def elevation_change(self):
     #Repeat for new Raster
     newRasterRef=QgsRasterCalculatorEntry()
     #In case there are 2 layers named the same, it grabs the first one
-    newRasterRef.raster=newRaster[0]
+    newRasterRef.raster=newRaster
     newRasterRef.bandNumber = 1
-    newRasterRef.crs = newRaster[0].crs
+    newRasterRef.crs = newRaster.crs
     newRasterRef.ref = "newRaster@1"
 
 
@@ -262,10 +291,10 @@ def elevation_change(self):
     differenceRaster = QgsRasterCalculator(formulaString,\
                                             outputFilename,\
                                             "GTiff",\
-                                            oldRaster[0].extent(),\
+                                            oldRaster.extent(),\
                                             oldCrs,\
-                                            oldRaster[0].width(), \
-                                            oldRaster[0].height(),\
+                                            oldRaster.width(), \
+                                            oldRaster.height(),\
                                             entries,\
                                             context)
     QgsMessageLog.logMessage("Raster Calculation loaded", 'vol test', Qgis.Info)

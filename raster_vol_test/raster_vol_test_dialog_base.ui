@@ -117,19 +117,6 @@
       <string>...</string>
      </property>
     </widget>
-    <widget class="QCheckBox" name="chkLayout">
-     <property name="geometry">
-      <rect>
-       <x>420</x>
-       <y>10</y>
-       <width>101</width>
-       <height>17</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Create Layout</string>
-     </property>
-    </widget>
     <widget class="QCheckBox" name="chkStats">
      <property name="geometry">
       <rect>
@@ -201,6 +188,29 @@
       <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
      </property>
     </widget>
+    <widget class="QCheckBox" name="chkBB">
+     <property name="geometry">
+      <rect>
+       <x>340</x>
+       <y>40</y>
+       <width>121</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Use Bounding Box</string>
+     </property>
+    </widget>
+    <widget class="QgsMapLayerComboBox" name="cmbBB">
+     <property name="geometry">
+      <rect>
+       <x>310</x>
+       <y>90</y>
+       <width>160</width>
+       <height>27</height>
+      </rect>
+     </property>
+    </widget>
    </widget>
    <widget class="QWidget" name="tab_2">
     <attribute name="title">
@@ -222,25 +232,17 @@
       <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
      </property>
     </widget>
-   </widget>
-   <widget class="QWidget" name="tab_3">
-    <attribute name="title">
-     <string>Página</string>
-    </attribute>
-    <widget class="QDialogButtonBox" name="btnTester">
+    <widget class="QCheckBox" name="chkLayout">
      <property name="geometry">
       <rect>
-       <x>20</x>
-       <y>310</y>
-       <width>161</width>
-       <height>32</height>
+       <x>410</x>
+       <y>20</y>
+       <width>101</width>
+       <height>17</height>
       </rect>
      </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     <property name="text">
+      <string>Create Layout</string>
      </property>
     </widget>
    </widget>
