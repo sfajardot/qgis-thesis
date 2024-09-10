@@ -185,7 +185,7 @@
       <string>...</string>
      </property>
     </widget>
-    <widget class="QDialogButtonBox" name="button_box">
+    <widget class="QDialogButtonBox" name="btnProcess">
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -206,10 +206,31 @@
     <attribute name="title">
      <string>Layout</string>
     </attribute>
-    <widget class="QDialogButtonBox" name="button_box_2">
+    <widget class="QDialogButtonBox" name="btnLayout">
      <property name="geometry">
       <rect>
        <x>10</x>
+       <y>310</y>
+       <width>161</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QWidget" name="tab_3">
+    <attribute name="title">
+     <string>Página</string>
+    </attribute>
+    <widget class="QDialogButtonBox" name="btnTester">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
        <y>310</y>
        <width>161</width>
        <height>32</height>
@@ -235,7 +256,7 @@
  <resources/>
  <connections>
   <connection>
-   <sender>button_box</sender>
+   <sender>btnProcess</sender>
    <signal>accepted()</signal>
    <receiver>RasterTesterDialogBase</receiver>
    <slot>accept()</slot>
@@ -251,7 +272,7 @@
    </hints>
   </connection>
   <connection>
-   <sender>button_box</sender>
+   <sender>btnProcess</sender>
    <signal>rejected()</signal>
    <receiver>RasterTesterDialogBase</receiver>
    <slot>reject()</slot>
