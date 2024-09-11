@@ -213,8 +213,7 @@ def elevation_change(self):
     outputFilename = self.dlg.lnOutput.text()
     #Get the first raster layer (older year)
     oldRasterName = self.dlg.cmbOld.currentText()
-    #If there is more than one layer named the same it creates a list
-    oldRaster = QgsProject.instance().mapLayersByName(oldRasterName)[0]
+    oldRaster = self.dlg.cmbOld.currentLayer()
     # Verify at least one layer is opened
     if not oldRaster:
         QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
@@ -225,8 +224,7 @@ def elevation_change(self):
 
     #Get the second raster layer (recent year)
     newRasterName = self.dlg.cmbNew.currentText()
-    #If there is more than one layer named the same it creates a list
-    newRaster = QgsProject.instance().mapLayersByName(newRasterName)[0]
+    newRaster = self.dlg.cmbNew.currentLayer()
     # Verify at least one layer is opened
     if not oldRaster:
         QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
@@ -244,9 +242,9 @@ def elevation_change(self):
             return
     #If layout is desired proceed to create layout
     if self.dlg.chkBB.isChecked():
-        boundingBoxName = self.dlg.cmbBB.currentText()
         #If there is more than one layer named the same it creates a list so grab the first one
-        boundingBox = QgsProject.instance().mapLayersByName(boundingBoxName)[0]
+        #boundingBox = QgsProject.instance().mapLayersByName(boundingBoxName)[0]
+        boundingBox = self.dlg.cmbBB.currentLayer()
         newRaster = clip_raster(newRaster, boundingBox)
         QgsMessageLog.logMessage(f"CRS {newRaster.crs()}", 'vol test', Qgis.Info)
         oldRaster = clip_raster(oldRaster, boundingBox)
@@ -286,8 +284,7 @@ def elevation_change(self):
     entries.append(oldRasterRef)
     #define Formula String. In this case New Raster - Old Raster to see changes from previous year to next
     formulaString = newRasterRef.ref + ' - ' + oldRasterRef.ref
-    #Need to verify requirements with team. In this case, 
-    # the operation is done with oldRaster's extent, cell width and height.
+    #Run QGSRasterCalcualtor
     differenceRaster = QgsRasterCalculator(formulaString,\
                                             outputFilename,\
                                             "GTiff",\
@@ -310,16 +307,6 @@ def elevation_change(self):
     VolChange = totalDiff*0.2*0.2
     print(VolChange/1000000)
 
-
-    #If layout is desired proceed to create layout
-    if self.dlg.chkLayout.isChecked():
-        layoutName = os.path.splitext(os.path.basename(outputFilename))[0]
-        QgsMessageLog.logMessage("Layout is Checked", 'vol test', Qgis.Info)
-        extent = oldRaster[0].extent()
-        run_layout(self, extent, layoutName)
-        #raster_symbology(rasterDiff[0])
-        QgsMessageLog.logMessage("Layout Created", 'vol test', Qgis.Info)
-
     #If Save Stats is checked, proceed to create csv    
     if self.dlg.chkStats.isChecked():
         QgsMessageLog.logMessage("GetStatistics is Checked", 'vol test', Qgis.Info)
@@ -341,4 +328,15 @@ def elevation_change(self):
         QgsMessageLog.logMessage("Statistics Exported", 'vol test', Qgis.Info)
     QgsMessageLog.logMessage("End of Processes", 'vol test', Qgis.Info)
 
+def layout_report(self):
+
+    layoutName = self.dlg.lnLayoutName.text()
+    if not layoutName:
+         layoutName = "Report Layout"
+    QgsMessageLog.logMessage(f"Layout {layoutName} being created", 'vol test', Qgis.Info)
+    points = self.dlg.cmbPoints.currentLayer()
+    extent = points.extent()
+    run_layout(self, extent, layoutName)
+    #raster_symbology(rasterDiff[0])
+    QgsMessageLog.logMessage("Layout Created", 'vol test', Qgis.Info)
                              

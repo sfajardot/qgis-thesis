@@ -31,7 +31,7 @@ import sys
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
-from qgis.core import QgsProject, Qgis,  QgsMessageLog, QgsPrintLayout, QgsSingleBandPseudoColorRenderer, QgsRasterShader
+from qgis.core import  Qgis,  QgsMessageLog, QgsMapLayerProxyModel, QgsFieldProxyModel
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.utils import iface
 
@@ -231,7 +231,7 @@ class RasterTester:
 
     def report_layout(self):
         QgsMessageLog.logMessage('Layout button pressed ', 'vol test', Qgis.Info)
-
+        layout_report(self)
 
 
     def close_dialog(self):
@@ -245,15 +245,23 @@ class RasterTester:
         if self.first_start == True:
             self.first_start = False
             self.dlg = RasterTesterDialog()
+            #Connect buttons for save files
             self.dlg.btnOutput.clicked.connect(self.select_output_file) 
             self.dlg.btnOutputStats.clicked.connect(self.select_output_file_stats)
-
+            #Connect Accept and Cancel buttons in Processing Tab
             self.dlg.btnProcess.accepted.connect(self.raster_processing)
             self.dlg.btnProcess.rejected.connect(self.close_dialog)
-
+            #Connect Accept and Cancel Buttons in Layout Tab
             self.dlg.btnLayout.accepted.connect(self.report_layout)
             self.dlg.btnLayout.rejected.connect(self.close_dialog) 
-            
+            #Set respective filters for rasters and polygons
+            self.dlg.cmbOld.setFilters(QgsMapLayerProxyModel.RasterLayer)
+            self.dlg.cmbNew.setFilters(QgsMapLayerProxyModel.RasterLayer)
+            self.dlg.cmbBB.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+            self.dlg.cmbPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
+            #Connect Field Value Combo Box to cmbPoints
+            self.dlg.cmbFieldValue.setLayer(self.dlg.cmbPoints.currentLayer())
+            self.dlg.cmbFieldValue.setFilters(QgsFieldProxyModel.Numeric)
              
 
         # show the dialog

@@ -23,7 +23,7 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>0</number>
+    <number>1</number>
    </property>
    <widget class="QWidget" name="tab">
     <attribute name="title">
@@ -64,6 +64,9 @@
        <height>27</height>
       </rect>
      </property>
+     <property name="showCrs">
+      <bool>true</bool>
+     </property>
     </widget>
     <widget class="QLabel" name="label_2">
      <property name="geometry">
@@ -86,6 +89,9 @@
        <width>160</width>
        <height>27</height>
       </rect>
+     </property>
+     <property name="showCrs">
+      <bool>true</bool>
      </property>
     </widget>
     <widget class="QLineEdit" name="lnOutput">
@@ -219,6 +225,9 @@
        <height>27</height>
       </rect>
      </property>
+     <property name="showCrs">
+      <bool>true</bool>
+     </property>
     </widget>
    </widget>
    <widget class="QWidget" name="tab_2">
@@ -241,17 +250,99 @@
       <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
      </property>
     </widget>
-    <widget class="QCheckBox" name="chkLayout">
+    <widget class="QgsMapLayerComboBox" name="cmbPoints">
      <property name="geometry">
       <rect>
-       <x>410</x>
-       <y>20</y>
-       <width>101</width>
-       <height>17</height>
+       <x>10</x>
+       <y>30</y>
+       <width>160</width>
+       <height>27</height>
+      </rect>
+     </property>
+     <property name="showCrs">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QgsFieldComboBox" name="cmbFieldValue">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>90</y>
+       <width>160</width>
+       <height>27</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="lnLayoutName">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>150</y>
+       <width>113</width>
+       <height>20</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lblRefPoints">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>91</width>
+       <height>16</height>
       </rect>
      </property>
      <property name="text">
-      <string>Create Layout</string>
+      <string>Reference Points</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lblFieldVal">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>70</y>
+       <width>71</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Field Value</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lblLayoutName">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>130</y>
+       <width>71</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Layout Name</string>
+     </property>
+    </widget>
+    <widget class="QgsSymbolButton" name="mSymbolButton">
+     <property name="geometry">
+      <rect>
+       <x>260</x>
+       <y>30</y>
+       <width>71</width>
+       <height>27</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_3">
+     <property name="geometry">
+      <rect>
+       <x>260</x>
+       <y>10</y>
+       <width>61</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Symbology</string>
      </property>
     </widget>
    </widget>
@@ -259,9 +350,19 @@
  </widget>
  <customwidgets>
   <customwidget>
+   <class>QgsFieldComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsfieldcombobox.h</header>
+  </customwidget>
+  <customwidget>
    <class>QgsMapLayerComboBox</class>
    <extends>QComboBox</extends>
    <header>qgsmaplayercombobox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsSymbolButton</class>
+   <extends>QToolButton</extends>
+   <header>qgssymbolbutton.h</header>
   </customwidget>
  </customwidgets>
  <resources/>
