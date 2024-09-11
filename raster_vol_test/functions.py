@@ -3,7 +3,10 @@ import csv
 from qgis.PyQt.QtGui import QColor
 from qgis.core import Qgis, QgsProject, QgsPrintLayout, QgsMessageLog, QgsLayoutItemMap, QgsLayoutPoint, \
      QgsUnitTypes, QgsApplication, QgsLayoutItemPage, QgsRasterBandStats, QgsColorRampShader,\
-     QgsRasterShader, QgsSingleBandPseudoColorRenderer, QgsProcessing, QgsRasterLayer
+     QgsRasterShader, QgsSingleBandPseudoColorRenderer, QgsProcessing, QgsRasterLayer,\
+     QgsGraduatedSymbolRenderer, QgsRendererRangeLabelFormat, QgsStyle ,\
+     QgsClassificationEqualInterval, QgsClassificationJenks, QgsClassificationQuantile,\
+     QgsClassificationStandardDeviation
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.utils import iface
 from PyQt5.QtWidgets import  QMessageBox
@@ -144,52 +147,88 @@ def add_map(self, e, layout, layout_height, layout_width, map_height, map_width,
     return map_real_height, map_real_width, x_offset, y_offset
 
 def run_layout(self, extent, layoutName):
-        #The extent of the layput is the old Year Raster
-        map_width = extent.xMaximum() - extent.xMinimum()
-        map_height = extent.yMaximum() - extent.yMinimum()
-        if (map_height==0) or (map_width==0):
-            QgsMessageLog.logMessage("No loaded data - aborting", 'vol test', Qgis.Info)
-            return
+    #The extent of the layput is the old Year Raster
+    map_width = extent.xMaximum() - extent.xMinimum()
+    map_height = extent.yMaximum() - extent.yMinimum()
+    if (map_height==0) or (map_width==0):
+        QgsMessageLog.logMessage("No loaded data - aborting", 'vol test', Qgis.Info)
+        return
 
 
-        try:
-            layout, manager = create_layout(self, layoutName)
-        except:
-            # Quick and dirty. In case people decide not to replace previous layout
-            QgsMessageLog.logMessage("Cancelled", 'vol test', Qgis.Info)
-            return
+    try:
+        layout, manager = create_layout(self, layoutName)
+    except:
+        # Quick and dirty. In case people decide not to replace previous layout
+        QgsMessageLog.logMessage("Cancelled", 'vol test', Qgis.Info)
+        return
+    
+    # Determine and set best layout orientation
+    landscape, layout_height, layout_width,\
+            map_height, map_width, \
+            scale_ratio = determine_orientation(self, \
+                                                extent, layout)
+
+    # Calculate scale
+    map_height, map_width, my_map = determine_scale(self, landscape, \
+                                                    layout, layout_height, layout_width,\
+                                                        map_height, map_width, scale_ratio)
+
+    # Add map
+    add_map(self, extent, layout, layout_height, \
+            layout_width, map_height, map_width, 10, my_map)
+
+    manager.addLayout(layout)
+    self.iface.openLayoutDesigner(layout)
+def graduated_symbology(self, layer, attribute_name, sym_type, classification_method, num_classes):
+    if sym_type == 'Graduated': 
+        ramp_name = 'Spectral'   
+        method = {'Equal Interval': QgsClassificationEqualInterval(),\
+                    'Jenks': QgsClassificationJenks(),\
+                    'Quantile': QgsClassificationQuantile()}.get(classification_method)
+        field_index = layer.fields().lookupField(attribute_name)
+        if not field_index:
+                QMessageBox.critical(self.dlg, "Attribute not found", f"Attribute {attribute_name} not found")
+                return
+        values = layer.dataProvider().uniqueValues(field_index)
+        if len(values)<2:
+                QMessageBox.critical(self.dlg, "Not Enough Values", f"{attribute_name} does not have enough unique values")
+                return
+
+        #Change format setting as necessary
+        format = QgsRendererRangeLabelFormat()
+        format.setFormat("%1 - %2")
+        format.setPrecision(2)
+        format.setTrimTrailingZeroes(True)
         
-        # Determine and set best layout orientation
-        landscape, layout_height, layout_width,\
-                map_height, map_width, \
-                scale_ratio = determine_orientation(self, \
-                                                    extent, layout)
+        #Apply the renderer
+        default_style = QgsStyle().defaultStyle()
+        color_ramp = default_style.colorRamp(ramp_name)
 
-        # Calculate scale
-        map_height, map_width, my_map = determine_scale(self, landscape, \
-                                                        layout, layout_height, layout_width,\
-                                                            map_height, map_width, scale_ratio)
+        renderer = QgsGraduatedSymbolRenderer()
+        renderer.setClassAttribute(attribute_name)
+        renderer.setClassificationMethod(method)
+        renderer.setLabelFormat(format)
+        renderer.updateClasses(layer, num_classes)
+        renderer.updateColorRamp(color_ramp)
 
-        # Add map
-        add_map(self, extent, layout, layout_height, \
-                layout_width, map_height, map_width, 10, my_map)
-
-        manager.addLayout(layout)
-        self.iface.openLayoutDesigner(layout)
+        layer.setRenderer(renderer)
+        layer.triggerRepaint()
+    #if sym_type == 'Vector Field Marker':
+    #    renderer = 
 
 def raster_symbology(rlayer):
-     stats = rlayer.dataProvider().bandStatistics(1, QgsRasterBandStats.All)
-     min = stats.minimumValue
-     max = stats.maximumValue
-     fnc = QgsColorRampShader()
-     fnc.setColorRampType(QgsColorRampShader.Interpolated)
-     lst = [QgsColorRampShader.ColorRampItem(min, QColor('Red')),\
-            QgsColorRampShader.ColorRampItem(max, QColor('Blue'))]
-     fnc.setColorRampItemList(lst)
-     shader = QgsRasterShader()
-     shader.setRasterShaderFunction(fnc)
-     renderer = QgsSingleBandPseudoColorRenderer(rlayer.dataProvider(), 1, shader)
-     rlayer.setRenderer(renderer)
+    stats = rlayer.dataProvider().bandStatistics(1, QgsRasterBandStats.All)
+    min = stats.minimumValue
+    max = stats.maximumValue
+    fnc = QgsColorRampShader()
+    fnc.setColorRampType(QgsColorRampShader.Interpolated)
+    lst = [QgsColorRampShader.ColorRampItem(min, QColor('Red')),\
+           QgsColorRampShader.ColorRampItem(max, QColor('Blue'))]
+    fnc.setColorRampItemList(lst)
+    shader = QgsRasterShader()
+    shader.setRasterShaderFunction(fnc)
+    renderer = QgsSingleBandPseudoColorRenderer(rlayer.dataProvider(), 1, shader)
+    rlayer.setRenderer(renderer)
 
 def clip_raster(rLayer, bBox):
      parameters = {'INPUT': rLayer,
@@ -207,10 +246,36 @@ def clip_raster(rLayer, bBox):
      clipRaster = QgsRasterLayer(clip['OUTPUT'])
      return clipRaster
 
+def get_stats(self, rLayer):
+    stats = rLayer.dataProvider().bandStatistics(1, QgsRasterBandStats.All)
+    outputFilenameStats = self.dlg.lnOutputStats.text()
+    if not outputFilenameStats:
+         QMessageBox.critical(self.dlg, "No Output Path", "Missing Output Save Name for Statistics File")
+         return
+    fieldnames = ['Statistic', 'Value']
+    dict_data = [{'Statistic': 'Band_Number', 'Value': stats.bandNumber},\
+                    {'Statistic': 'Mean', 'Value': stats.mean},\
+                    {'Statistic': 'Std_Dev', 'Value': stats.stdDev},\
+                    {'Statistic': 'Sum', 'Value': stats.sum},\
+                    {'Statistic': 'Sum_of_Squares', 'Value': stats.sumOfSquares},\
+                    {'Statistic': 'Minimum', 'Value': stats.minimumValue},\
+                    {'Statistic': 'Maximum', 'Value': stats.maximumValue},\
+                    {'Statistic': 'Range', 'Value': stats.range}]
+    with open(outputFilenameStats, 'w') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames)
+        writer.writeheader()
+        for data in dict_data:
+            writer.writerow(data)
+    QgsMessageLog.logMessage("Statistics Exported", 'vol test', Qgis.Info)
+    QgsMessageLog.logMessage("End of Processes", 'vol test', Qgis.Info)
+
 def elevation_change(self):
     QgsMessageLog.logMessage('Processing task started ', 'vol test', Qgis.Info)
     #Declare name of output file from text in output box.
     outputFilename = self.dlg.lnOutput.text()
+    if not outputFilename:
+         QMessageBox.critical(self.dlg, "No Output Path", "Missing Output Save Name")
+         return
     #Get the first raster layer (older year)
     oldRasterName = self.dlg.cmbOld.currentText()
     oldRaster = self.dlg.cmbOld.currentLayer()
@@ -301,41 +366,28 @@ def elevation_change(self):
     rName = os.path.splitext(os.path.basename(outputFilename))[0]
     iface.addRasterLayer(outputFilename, rName)
 
-    rasterDiff = QgsProject.instance().mapLayersByName(rName)
-    stats = rasterDiff[0].dataProvider().bandStatistics(1, QgsRasterBandStats.All)
-    totalDiff = stats.sum
-    VolChange = totalDiff*0.2*0.2
-    print(VolChange/1000000)
-
     #If Save Stats is checked, proceed to create csv    
     if self.dlg.chkStats.isChecked():
+        rasterDiff = QgsProject.instance().mapLayersByName(rName)
         QgsMessageLog.logMessage("GetStatistics is Checked", 'vol test', Qgis.Info)
-        outputFilenameStats = self.dlg.lnOutputStats.text()
-        fieldnames = ['Statistic', 'Value']
-        dict_data = [{'Statistic': 'Band_Number', 'Value': stats.bandNumber},\
-                        {'Statistic': 'Mean', 'Value': stats.mean},\
-                        {'Statistic': 'Std_Dev', 'Value': stats.stdDev},\
-                        {'Statistic': 'Sum', 'Value': stats.sum},\
-                        {'Statistic': 'Sum_of_Squares', 'Value': stats.sumOfSquares},\
-                        {'Statistic': 'Minimum', 'Value': stats.minimumValue},\
-                        {'Statistic': 'Maximum', 'Value': stats.maximumValue},\
-                        {'Statistic': 'Range', 'Value': stats.range}]
-        with open(outputFilenameStats, 'w') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames)
-            writer.writeheader()
-            for data in dict_data:
-                writer.writerow(data)
-        QgsMessageLog.logMessage("Statistics Exported", 'vol test', Qgis.Info)
-    QgsMessageLog.logMessage("End of Processes", 'vol test', Qgis.Info)
+        get_stats(self, rasterDiff[0])
 
 def layout_report(self):
+    layer = self.dlg.cmbPoints.currentLayer()
+    attribute_name = self.dlg.cmbFieldValue.currentField()
+    classification_method = self.dlg.cmbGradMeth.currentText()
+    num_class = self.dlg.spbNumClass.value()
+    sym_type = self.dlg.cmbSymType.currentText()
 
+    graduated_symbology(self, layer, attribute_name, sym_type, classification_method, num_class)
+    
     layoutName = self.dlg.lnLayoutName.text()
     if not layoutName:
          layoutName = "Report Layout"
     QgsMessageLog.logMessage(f"Layout {layoutName} being created", 'vol test', Qgis.Info)
     points = self.dlg.cmbPoints.currentLayer()
-    extent = points.extent()
+    #Adds a 10% buffer to the extent of the map so corner points are more visible
+    extent = points.extent().buffered(points.extent().width()*0.1)
     run_layout(self, extent, layoutName)
     #raster_symbology(rasterDiff[0])
     QgsMessageLog.logMessage("Layout Created", 'vol test', Qgis.Info)

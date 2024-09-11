@@ -325,8 +325,8 @@
     <widget class="QgsSymbolButton" name="mSymbolButton">
      <property name="geometry">
       <rect>
-       <x>260</x>
-       <y>30</y>
+       <x>290</x>
+       <y>260</y>
        <width>71</width>
        <height>27</height>
       </rect>
@@ -343,6 +343,67 @@
      </property>
      <property name="text">
       <string>Symbology</string>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="cmbSymType">
+     <property name="geometry">
+      <rect>
+       <x>240</x>
+       <y>30</y>
+       <width>141</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <item>
+      <property name="text">
+       <string>Graduated</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Vector Field Marker</string>
+      </property>
+     </item>
+    </widget>
+    <widget class="QComboBox" name="cmbGradMeth">
+     <property name="geometry">
+      <rect>
+       <x>230</x>
+       <y>90</y>
+       <width>121</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <item>
+      <property name="text">
+       <string>Equal Interval</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Jenks</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Quantile</string>
+      </property>
+     </item>
+    </widget>
+    <widget class="QSpinBox" name="spbNumClass">
+     <property name="geometry">
+      <rect>
+       <x>240</x>
+       <y>150</y>
+       <width>42</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="minimum">
+      <number>2</number>
+     </property>
+     <property name="maximum">
+      <number>5</number>
      </property>
     </widget>
    </widget>
