@@ -232,7 +232,10 @@ class RasterTester:
     def report_layout(self):
         QgsMessageLog.logMessage('Layout button pressed ', 'vol test', Qgis.Info)
         layout_report(self)
-
+        
+    def monography(self):
+        QgsMessageLog.logMessage('Monography button pressed ', 'vol test', Qgis.Info)
+        create_monograph(self)
 
     def close_dialog(self):
         self.dlg.close()
@@ -254,14 +257,21 @@ class RasterTester:
             #Connect Accept and Cancel Buttons in Layout Tab
             self.dlg.btnLayout.accepted.connect(self.report_layout)
             self.dlg.btnLayout.rejected.connect(self.close_dialog) 
+            #Connect Accept and Cancel Buttons in Monography Tab
+            self.dlg.btnMono.accepted.connect(self.monography)
+            self.dlg.btnMono.rejected.connect(self.close_dialog) 
             #Set respective filters for rasters and polygons
             self.dlg.cmbOld.setFilters(QgsMapLayerProxyModel.RasterLayer)
             self.dlg.cmbNew.setFilters(QgsMapLayerProxyModel.RasterLayer)
             self.dlg.cmbBB.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-            self.dlg.cmbPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
+            self.dlg.cmbLayoutPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
+            self.dlg.cmbMonoPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
             #Connect Field Value Combo Box to cmbPoints
-            self.dlg.cmbFieldValue.setLayer(self.dlg.cmbPoints.currentLayer())
+            self.dlg.cmbFieldValue.setLayer(self.dlg.cmbLayoutPoints.currentLayer())
             self.dlg.cmbFieldValue.setFilters(QgsFieldProxyModel.Numeric)
+            #Connect Monography Feature to Monography Points
+            self.dlg.cmbMonoFeat.setLayer(self.dlg.cmbMonoPoints.currentLayer())
+            
              
 
         # show the dialog
@@ -274,3 +284,5 @@ class RasterTester:
                 self.raster_processing
             if self.dlg.btnLayout.accepted == True:
                 self.report_layout
+            if self.dlg.btnMono.accepted == True:
+                self.create_monograph

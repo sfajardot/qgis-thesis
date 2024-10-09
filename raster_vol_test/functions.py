@@ -6,10 +6,13 @@ from qgis.core import Qgis, QgsProject, QgsPrintLayout, QgsMessageLog, QgsLayout
      QgsRasterShader, QgsSingleBandPseudoColorRenderer, QgsProcessing, QgsRasterLayer,\
      QgsGraduatedSymbolRenderer, QgsRendererRangeLabelFormat, QgsStyle ,\
      QgsClassificationEqualInterval, QgsClassificationJenks, QgsClassificationQuantile,\
-     QgsClassificationStandardDeviation
+        QgsLayoutItemTextTable, QgsLayoutTableColumn, QgsLayoutFrame, QgsLayoutSize,\
+        QgsLayoutItemLabel, QgsTextFormat
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.utils import iface
 from PyQt5.QtWidgets import  QMessageBox
+from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt
 from qgis import processing
 
 def create_layout(self, layout_name):
@@ -373,7 +376,7 @@ def elevation_change(self):
         get_stats(self, rasterDiff[0])
 
 def layout_report(self):
-    layer = self.dlg.cmbPoints.currentLayer()
+    layer = self.dlg.cmbLayoutPoints.currentLayer()
     attribute_name = self.dlg.cmbFieldValue.currentField()
     classification_method = self.dlg.cmbGradMeth.currentText()
     num_class = self.dlg.spbNumClass.value()
@@ -385,10 +388,105 @@ def layout_report(self):
     if not layoutName:
          layoutName = "Report Layout"
     QgsMessageLog.logMessage(f"Layout {layoutName} being created", 'vol test', Qgis.Info)
-    points = self.dlg.cmbPoints.currentLayer()
+    points = self.dlg.cmbLayoutPoints.currentLayer()
     #Adds a 10% buffer to the extent of the map so corner points are more visible
     extent = points.extent().buffered(points.extent().width()*0.1)
     run_layout(self, extent, layoutName)
     #raster_symbology(rasterDiff[0])
     QgsMessageLog.logMessage("Layout Created", 'vol test', Qgis.Info)
+
+def create_monograph(self):
+     layer = self.dlg.cmbMonoPoints.currentLayer()
+     #Get selected feature
+     feature = self.dlg.cmbMonoFeat.feature()
+     #Get the name of the label
+     layout_name = feature["label"]
+     #Get descriptions
+     target_color = self.dlg.txtTrgClr.toPlainText()
+     target_description = self.dlg.txtTrgDscr.toPlainText()
+     gnss_type = self.dlg.txtGnss.toPlainText()
+     srvy_date = feature["survey_date"].toString('dd-MM-yy')
+     #Determine type of Cround Control Point
+     gcp_bool = feature["is_fixed"]
+     if gcp_bool == 'false':
+          gcp_type = 'MOBILE'
+     else:
+          gcp_type = 'FIXED'
+
+
+     #Create layout and open it
+     layout, manager = create_layout(self, layout_name)
+     pc = layout.pageCollection()
+     pc.page(0).setPageSize('A4', QgsLayoutItemPage.Orientation.Portrait)
+     manager.addLayout(layout)
+     #Set title label
+     title = QgsLayoutItemLabel(layout)
+     title.setText(f"{layout_name}")
+     title_format = QgsTextFormat()
+     title_format.setFont(QFont('Times'))
+     title_format.setSize(36)
+     title.setTextFormat(title_format)
+     title.attemptResize(QgsLayoutSize(40, 20))
+     layout.addLayoutItem(title)
+     title.attemptMove(QgsLayoutPoint(7.5, 7.5, QgsUnitTypes.LayoutMillimeters))
+     #Set Polimi header
+     polimi = QgsLayoutItemLabel(layout)
+     polimi.setText("Politecnico di Milano\nDipartimento di Ingegneria Civile e Ambientale\nSezione di Geodesia e Geomatica")
+     polimi_format = QgsTextFormat()
+     polimi_format.setFont(QFont('Times'))
+     polimi_format.setSize(10)
+     polimi.setTextFormat(polimi_format)
+     polimi.attemptResize(QgsLayoutSize(75, 20))
+     layout.addLayoutItem(polimi)
+     polimi.attemptMove(QgsLayoutPoint(127.5, 7.5, QgsUnitTypes.LayoutMillimeters))
+
+     #Add Descriptions
+     dscr = QgsLayoutItemLabel(layout)
+     dscr.setText(f"Target: {target_color}\n\nDescrizione: {target_description}\nTipo di punto: {gcp_type}\n\nModalita di rilievo GNSS: {gnss_type}")
+     dscr_format = QgsTextFormat()
+     dscr_format.setFont(QFont('Times'))
+     dscr_format.setSize(12)
+     dscr.setTextFormat(dscr_format)
+     dscr.attemptResize(QgsLayoutSize(195, 70))
+     layout.addLayoutItem(dscr)
+     dscr.attemptMove(QgsLayoutPoint(7.5, 30, QgsUnitTypes.LayoutMillimeters))
+
+     #Add Survey Title
+     srvy = QgsLayoutItemLabel(layout)
+     srvy.setText(f"Coordinate {srvy_date}")
+     srvy_format = QgsTextFormat()
+     srvy_format.setFont(QFont('Times'))
+     srvy_format.setSize(12)
+     srvy_format.setForcedBold(True)
+     srvy.setTextFormat(srvy_format)
+     srvy.setHAlign(Qt.AlignCenter)
+     srvy.attemptResize(QgsLayoutSize(195, 7))
+     layout.addLayoutItem(srvy)
+     srvy.attemptMove(QgsLayoutPoint(7.5, 105, QgsUnitTypes.LayoutMillimeters))
+
+
+     #Create table for the coordinates
+     table = QgsLayoutItemTextTable(layout)
+     layout.addMultiFrame(table)
+     cols = [QgsLayoutTableColumn(),QgsLayoutTableColumn(),QgsLayoutTableColumn(), QgsLayoutTableColumn(),QgsLayoutTableColumn(),QgsLayoutTableColumn(),QgsLayoutTableColumn(),QgsLayoutTableColumn()]
+     cols[0].setHeading("X [m]")
+     cols[1].setHeading("Y [m]")
+     cols[2].setHeading("Z [m]")
+     cols[3].setHeading("Lat (j)")
+     cols[4].setHeading("Long (I)")
+     cols[5].setHeading("H ell [m]")
+     cols[6].setHeading("Est [m]")
+     cols[7].setHeading("Nord [m]")
+     table.setColumns(cols)
+    # Add rows
+     table.setContents([['', '', '', '', '', str(feature["h"]), str(feature["east"]), str(feature["north"])]])
+     frame = QgsLayoutFrame(layout, table)
+     frame.attemptResize(QgsLayoutSize(195, 30), True)
+     frame.attemptMove(QgsLayoutPoint(7.5, 110, QgsUnitTypes.LayoutMillimeters))
+     table.addFrame(frame)
+     
+
+     self.iface.openLayoutDesigner(layout)
+
+
                              
