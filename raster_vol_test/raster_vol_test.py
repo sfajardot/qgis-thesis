@@ -8,8 +8,8 @@
                               -------------------
         begin                : 2024-08-30
         git sha              : $Format:%H$
-        copyright            : (C) 2024 by Simona
-        email                : lacacariza@mail.com
+        copyright            : (C) 2024 by Sebastian
+        email                : mail@mail.com
  ***************************************************************************/
 
 /***************************************************************************
@@ -211,66 +211,87 @@ class RasterTester:
                 action)
             self.iface.removeToolBarIcon(action)
 
-    def select_output_file(self):  
-        
-        FileName = 'ElevationChange'
-        filename, _filter = QFileDialog.getSaveFileName(  
-            self.dlg, "Select output filename and destination",FileName, 'GeoTIFF(*.tif)')  
-        self.dlg.lnOutput.setText(filename)  
-    def select_output_file_stats(self):  
-        
-        FileName = 'RasterStatistics'
-        filename, _filter = QFileDialog.getSaveFileName(  
-            self.dlg, "Select output filename and destination",FileName, 'csv(*.csv)')  
-        self.dlg.lnOutputStats.setText(filename)  
-
+    def select_output_file(self, default_name, file_filter, line_edit):
+        """Open a file dialog to select a file."""
+        filename, _filter = QFileDialog.getSaveFileName(
+            self.dlg, "Select output filename and destination", default_name, file_filter)
+        if filename:
+            line_edit.setText(filename)
+    def select_input_file(self, line_edit):
+        """Open a file dialog to select a logo image (JPG or PNG)"""
+        file_filter = 'Image Files (*.jpg, *png)'
+        filename, _filter = QFileDialog.getOpenFileName(
+            self.dlg, "Select Image File","", file_filter)
+        if filename:
+            line_edit.setText(filename)
+    
     def raster_processing(self):
-        QgsMessageLog.logMessage('Processing button pressed ', 'vol test', Qgis.Info)
+        QgsMessageLog.logMessage('Processing button pressed', 'vol test', Qgis.Info)
         elevation_change(self)
-
+        self.dlg.close()
 
     def report_layout(self):
-        QgsMessageLog.logMessage('Layout button pressed ', 'vol test', Qgis.Info)
+        QgsMessageLog.logMessage('Layout button pressed', 'vol test', Qgis.Info)
         layout_report(self)
-        
+        self.dlg.close()
+
     def monography(self):
-        QgsMessageLog.logMessage('Monography button pressed ', 'vol test', Qgis.Info)
+        QgsMessageLog.logMessage('Monography button pressed', 'vol test', Qgis.Info)
         create_monograph(self)
+        self.dlg.close()
+
+    def populate_fields(self):
+        self.dlg.cmbFieldValue.setLayer(self.dlg.cmbLayoutPoints.currentLayer())
+        self.dlg.cmbFieldValue.setFilters(QgsFieldProxyModel.Numeric)
+
+    def populate_features(self):
+        self.dlg.cmbMonoFeat.setLayer(self.dlg.cmbMonoPoints.currentLayer())
 
     def close_dialog(self):
         self.dlg.close()
 
     def run(self):
-        """Run method that performs all the real work"""
-
-        # Create the dialog with elements (after translation) and keep reference
-        # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.first_start == True:
+        """Run method to initialize the plugin."""
+        if self.first_start:
             self.first_start = False
             self.dlg = RasterTesterDialog()
-            #Connect buttons for save files
-            self.dlg.btnOutput.clicked.connect(self.select_output_file) 
-            self.dlg.btnOutputStats.clicked.connect(self.select_output_file_stats)
-            #Connect Accept and Cancel buttons in Processing Tab
+
+            # File dialog connections
+            self.dlg.btnOutput.clicked.connect(lambda: self.select_output_file(
+                'ElevationChange', 'GeoTIFF(*.tif)', self.dlg.lnOutput))
+            self.dlg.btnOutputStats.clicked.connect(lambda: self.select_output_file(
+                'RasterStatistics', 'csv(*.csv)', self.dlg.lnOutputStats))
+            self.dlg.btnLogo.clicked.connect(lambda: self.select_input_file(
+                self.dlg.lnLogo))
+            self.dlg.btnPhoto_1.clicked.connect(lambda: self.select_input_file(
+                self.dlg.lnPhoto_1))
+            self.dlg.btnPhoto_2.clicked.connect(lambda: self.select_input_file(
+                self.dlg.lnPhoto_2))
+
+            # Processing and layout actions
             self.dlg.btnProcess.accepted.connect(self.raster_processing)
             self.dlg.btnProcess.rejected.connect(self.close_dialog)
-            #Connect Accept and Cancel Buttons in Layout Tab
             self.dlg.btnLayout.accepted.connect(self.report_layout)
-            self.dlg.btnLayout.rejected.connect(self.close_dialog) 
-            #Connect Accept and Cancel Buttons in Monography Tab
+            self.dlg.btnLayout.rejected.connect(self.close_dialog)
+
+            # Monography actions
             self.dlg.btnMono.accepted.connect(self.monography)
-            self.dlg.btnMono.rejected.connect(self.close_dialog) 
-            #Set respective filters for rasters and polygons
+            self.dlg.btnMono.rejected.connect(self.close_dialog)
+
+            # Populate fields and features
+            self.dlg.cmbLayoutPoints.layerChanged.connect(self.populate_fields)
+            self.dlg.cmbMonoPoints.layerChanged.connect(self.populate_features)
+
+            # Set filters for combo boxes
             self.dlg.cmbOld.setFilters(QgsMapLayerProxyModel.RasterLayer)
             self.dlg.cmbNew.setFilters(QgsMapLayerProxyModel.RasterLayer)
             self.dlg.cmbBB.setFilters(QgsMapLayerProxyModel.PolygonLayer)
             self.dlg.cmbLayoutPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
             self.dlg.cmbMonoPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
-            #Connect Field Value Combo Box to cmbPoints
-            self.dlg.cmbFieldValue.setLayer(self.dlg.cmbLayoutPoints.currentLayer())
-            self.dlg.cmbFieldValue.setFilters(QgsFieldProxyModel.Numeric)
-            #Connect Monography Feature to Monography Points
-            self.dlg.cmbMonoFeat.setLayer(self.dlg.cmbMonoPoints.currentLayer())
+
+            # Initialize field and feature values
+            self.populate_fields()
+            self.populate_features()
             
              
 

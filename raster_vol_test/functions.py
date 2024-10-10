@@ -6,8 +6,9 @@ from qgis.core import Qgis, QgsProject, QgsPrintLayout, QgsMessageLog, QgsLayout
      QgsRasterShader, QgsSingleBandPseudoColorRenderer, QgsProcessing, QgsRasterLayer,\
      QgsGraduatedSymbolRenderer, QgsRendererRangeLabelFormat, QgsStyle ,\
      QgsClassificationEqualInterval, QgsClassificationJenks, QgsClassificationQuantile,\
-        QgsLayoutItemTextTable, QgsLayoutTableColumn, QgsLayoutFrame, QgsLayoutSize,\
-        QgsLayoutItemLabel, QgsTextFormat
+     QgsRuleBasedRenderer, QgsLayoutSize, QgsLayoutItemPicture, QgsMarkerSymbol,\
+     QgsLayoutItemLabel, QgsTextFormat, QgsVectorLayerSimpleLabeling, QgsPalLayerSettings,\
+     QgsTextBufferSettings
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.utils import iface
 from PyQt5.QtWidgets import  QMessageBox
@@ -273,107 +274,95 @@ def get_stats(self, rLayer):
     QgsMessageLog.logMessage("End of Processes", 'vol test', Qgis.Info)
 
 def elevation_change(self):
-    QgsMessageLog.logMessage('Processing task started ', 'vol test', Qgis.Info)
-    #Declare name of output file from text in output box.
-    outputFilename = self.dlg.lnOutput.text()
-    if not outputFilename:
-         QMessageBox.critical(self.dlg, "No Output Path", "Missing Output Save Name")
-         return
-    #Get the first raster layer (older year)
-    oldRasterName = self.dlg.cmbOld.currentText()
-    oldRaster = self.dlg.cmbOld.currentLayer()
-    # Verify at least one layer is opened
-    if not oldRaster:
-        QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
-        QgsMessageLog.logMessage(f"Layer 1 {oldRasterName} missing, cancelling process ", 'vol test', Qgis.Info)
-        return 
-    QgsMessageLog.logMessage(f"Layer 1 {oldRasterName} loaded ", 'vol test', Qgis.Info)
+    """Perform elevation change calculation between two raster layers."""
+    QgsMessageLog.logMessage('Processing task started', 'vol test', Qgis.Info)
 
+    # Get output file path
+    output_filename = self.dlg.lnOutput.text()
+    if not output_filename:
+        QMessageBox.critical(self.dlg, "No Output Path", "Missing Output Save Name")
+        return
 
-    #Get the second raster layer (recent year)
-    newRasterName = self.dlg.cmbNew.currentText()
-    newRaster = self.dlg.cmbNew.currentLayer()
-    # Verify at least one layer is opened
-    if not oldRaster:
-        QMessageBox.critical(self.dlg, "Missing layer", f"{oldRasterName} missing")
-        QgsMessageLog.logMessage(f"Layer 1 {oldRasterName} missing, cancelling process ", 'vol test', Qgis.Info)
-        return 
-    QgsMessageLog.logMessage(f"Layer 2 {newRasterName} loaded ", 'vol test', Qgis.Info)
+    # Helper function to load raster layers
+    def get_raster_layer(combo_box, layer_type):
+        raster_name = combo_box.currentText()
+        raster_layer = combo_box.currentLayer()
+        if not raster_layer:
+            QMessageBox.critical(self.dlg, f"Missing {layer_type} layer", f"{raster_name} missing")
+            QgsMessageLog.logMessage(f"{layer_type} layer '{raster_name}' missing, cancelling process", 'vol test', Qgis.Info)
+            return None
+        QgsMessageLog.logMessage(f"{layer_type} layer '{raster_name}' loaded", 'vol test', Qgis.Info)
+        return raster_layer
 
+    # Load old and new raster layers
+    old_raster = get_raster_layer(self.dlg.cmbOld, "Old Raster")
+    if not old_raster:
+        return
+    new_raster = get_raster_layer(self.dlg.cmbNew, "New Raster")
+    if not new_raster:
+        return
 
-    #Check CRS
-    if newRaster.crs() != oldRaster.crs():
-        reply = QMessageBox.question(None, self.tr('CRS does not match...'), \
-                                        self.tr("The Layers are in different CRS, still want to continue?"),\
-                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+    # Check if CRS matches between old and new rasters
+    if new_raster.crs() != old_raster.crs():
+        reply = QMessageBox.question(
+            None, self.tr('CRS Mismatch'),
+            self.tr("The Layers are in different CRS. Do you want to continue?"),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
         if reply == QMessageBox.No:
             return
-    #If layout is desired proceed to create layout
+
+    # Clip rasters if bounding box is checked
     if self.dlg.chkBB.isChecked():
-        #If there is more than one layer named the same it creates a list so grab the first one
-        #boundingBox = QgsProject.instance().mapLayersByName(boundingBoxName)[0]
-        boundingBox = self.dlg.cmbBB.currentLayer()
-        newRaster = clip_raster(newRaster, boundingBox)
-        QgsMessageLog.logMessage(f"CRS {newRaster.crs()}", 'vol test', Qgis.Info)
-        oldRaster = clip_raster(oldRaster, boundingBox)
+        bounding_box = self.dlg.cmbBB.currentLayer()
+        if bounding_box:
+            new_raster = clip_raster(new_raster, bounding_box)
+            old_raster = clip_raster(old_raster, bounding_box)
+            QgsMessageLog.logMessage(f"Rasters clipped using bounding box. CRS: {new_raster.crs()}", 'vol test', Qgis.Info)
 
+    # Set up raster calculator entries
+    def create_raster_entry(raster, ref_name):
+        raster_entry = QgsRasterCalculatorEntry()
+        raster_entry.raster = raster
+        raster_entry.bandNumber = 1
+        raster_entry.ref = f"{ref_name}@1"
+        return raster_entry
 
-         
-   
-   
-    #Get context and CRS
-    context = QgsProject.instance().transformContext()
-    oldCrs = oldRaster.crs()
+    old_raster_ref = create_raster_entry(old_raster, "oldRaster")
+    new_raster_ref = create_raster_entry(new_raster, "newRaster")
 
+    # Perform raster calculation (New Raster - Old Raster)
+    formula_string = f"{new_raster_ref.ref} - {old_raster_ref.ref}"
+    entries = [new_raster_ref, old_raster_ref]
 
-    #sets up layer references
-    oldRasterRef = QgsRasterCalculatorEntry()
-    #In case there are 2 layers named the same, it grabs the first one
-    oldRasterRef.raster=oldRaster
-    oldRasterRef.bandNumber = 1
-    oldRasterRef.crs = oldRaster.crs
-    #The @1 is required for the formulaString
-    oldRasterRef.ref = "oldRaster@1"
-    
-    
-    #Repeat for new Raster
-    newRasterRef=QgsRasterCalculatorEntry()
-    #In case there are 2 layers named the same, it grabs the first one
-    newRasterRef.raster=newRaster
-    newRasterRef.bandNumber = 1
-    newRasterRef.crs = newRaster.crs
-    newRasterRef.ref = "newRaster@1"
+    difference_raster = QgsRasterCalculator(
+        formula_string,
+        output_filename,
+        "GTiff",
+        old_raster.extent(),
+        old_raster.crs(),
+        old_raster.width(),
+        old_raster.height(),
+        entries,
+        QgsProject.instance().transformContext()
+    )
 
+    QgsMessageLog.logMessage("Raster calculation started", 'vol test', Qgis.Info)
+    if difference_raster.processCalculation() == 0:
+        QgsMessageLog.logMessage("Raster calculation finished successfully", 'vol test', Qgis.Info)
+        r_name = os.path.splitext(os.path.basename(output_filename))[0]
+        iface.addRasterLayer(output_filename, r_name)
 
-    #Uses QgsRasterCalculator: https://api.qgis.org/api/classQgsRasterCalculator.html#abd4932102407a12b53036588893fa2cc
-    #define entries for QgsRasterCalculator
-    entries = []
-    entries.append(newRasterRef)
-    entries.append(oldRasterRef)
-    #define Formula String. In this case New Raster - Old Raster to see changes from previous year to next
-    formulaString = newRasterRef.ref + ' - ' + oldRasterRef.ref
-    #Run QGSRasterCalcualtor
-    differenceRaster = QgsRasterCalculator(formulaString,\
-                                            outputFilename,\
-                                            "GTiff",\
-                                            oldRaster.extent(),\
-                                            oldCrs,\
-                                            oldRaster.width(), \
-                                            oldRaster.height(),\
-                                            entries,\
-                                            context)
-    QgsMessageLog.logMessage("Raster Calculation loaded", 'vol test', Qgis.Info)
-    #Run calculation
-    differenceRaster.processCalculation()
-    QgsMessageLog.logMessage("Raster Calculation finished succesfully", 'vol test', Qgis.Info)
-    rName = os.path.splitext(os.path.basename(outputFilename))[0]
-    iface.addRasterLayer(outputFilename, rName)
+        # If 'Save Stats' is checked, generate statistics
+        if self.dlg.chkStats.isChecked():
+            QgsMessageLog.logMessage("Saving statistics is checked", 'vol test', Qgis.Info)
+            raster_diff = QgsProject.instance().mapLayersByName(r_name)
+            if raster_diff:
+                get_stats(self, raster_diff[0])
+    else:
+        QMessageBox.critical(self.dlg, "Error", "Raster calculation failed.")
+        QgsMessageLog.logMessage("Raster calculation failed", 'vol test', Qgis.Critical)
 
-    #If Save Stats is checked, proceed to create csv    
-    if self.dlg.chkStats.isChecked():
-        rasterDiff = QgsProject.instance().mapLayersByName(rName)
-        QgsMessageLog.logMessage("GetStatistics is Checked", 'vol test', Qgis.Info)
-        get_stats(self, rasterDiff[0])
 
 def layout_report(self):
     layer = self.dlg.cmbLayoutPoints.currentLayer()
@@ -395,98 +384,214 @@ def layout_report(self):
     #raster_symbology(rasterDiff[0])
     QgsMessageLog.logMessage("Layout Created", 'vol test', Qgis.Info)
 
+def create_text(layout, text, font_size, font = 'Times', bold = False, frame = True, HAlign = True, VAlign = True):
+    txtbox = QgsLayoutItemLabel(layout)
+    txtbox.setText(text)
+    txtbox_format = QgsTextFormat()
+    txtbox_format.setFont(QFont(font))
+    txtbox_format.setSize(font_size)
+    txtbox_format.setForcedBold(bold)
+    txtbox.setTextFormat(txtbox_format)
+    txtbox.setFrameEnabled(frame)
+    if HAlign:
+         txtbox.setHAlign(Qt.AlignCenter)
+    if VAlign:
+         txtbox.setVAlign(Qt.AlignCenter)
+    layout.addLayoutItem(txtbox)
+    return txtbox
+
+def create_image(layout, filepath, idName):
+     picture = QgsLayoutItemPicture(layout)
+     picture.setPicturePath(filepath)
+     picture.setId(idName)
+     layout.addLayoutItem(picture)
+     return picture
+
+def map_single_point_with_labels(layout, feature, layer):
+    #Add Map
+    map = QgsLayoutItemMap(layout)
+    #Necessary to create map, gets overriden later with the extent
+    map.setRect(20,20,20,20)
+
+    #Set up red color symbology for selected feature
+    symbol = QgsMarkerSymbol.createSimple({'color': 'red', 'size': '5'})
+
+    # Create a rule-based renderer to apply the symbology only to the selected feature
+    expression = f'"id" = {feature.id()}'  # Use field name directly
+    
+    # Create the root rule (with no filter)
+    root_rule = QgsRuleBasedRenderer.Rule(None)
+    
+    # Create a rule for the selected feature with the red symbol
+    rule = QgsRuleBasedRenderer.Rule(symbol)
+    rule.setFilterExpression(expression)  # Set the expression as a string
+    
+    # Add the rule to the root rule
+    root_rule.appendChild(rule)
+
+    # Set the rule-based renderer to the points layer
+    renderer = QgsRuleBasedRenderer(root_rule)
+    layer.setRenderer(renderer)
+
+    # Refresh the layer to apply the new renderer
+    layer.triggerRepaint()
+
+    # Set up labeling
+    settings = QgsPalLayerSettings()
+    
+    # Enable labeling and set the field for the label
+    settings.fieldName = "label"  # Assuming the field name is 'label'
+    settings.enabled = True
+    # Customize the font
+    text_format = QgsTextFormat()
+    text_format.setFont(QFont("Times"))  # Set font family and size
+    text_format.setSize(18)  # Set label size
+
+    # Set up text buffer (mask)
+    buffer = QgsTextBufferSettings()
+    buffer.setEnabled(True)
+    buffer.setSize(1.5)  # Adjust the buffer size
+    buffer.setColor(QColor("white"))  # Set buffer color (white)
+    text_format.setBuffer(buffer)
+
+    # Apply the text format (font + buffer) to the settings
+    settings.setFormat(text_format)
+    
+    # Apply label settings to the layer
+    labeling = QgsVectorLayerSimpleLabeling(settings)
+    layer.setLabelsEnabled(True)
+    layer.setLabeling(labeling)  
+    # Refresh the map canvas to show labels
+    layer.triggerRepaint()
+    return map
+
 def create_monograph(self):
-     layer = self.dlg.cmbMonoPoints.currentLayer()
-     #Get selected feature
-     feature = self.dlg.cmbMonoFeat.feature()
-     #Get the name of the label
-     layout_name = feature["label"]
-     #Get descriptions
-     target_color = self.dlg.txtTrgClr.toPlainText()
-     target_description = self.dlg.txtTrgDscr.toPlainText()
-     gnss_type = self.dlg.txtGnss.toPlainText()
-     srvy_date = feature["survey_date"].toString('dd-MM-yy')
-     #Determine type of Cround Control Point
-     gcp_bool = feature["is_fixed"]
-     if gcp_bool == 'false':
-          gcp_type = 'MOBILE'
-     else:
-          gcp_type = 'FIXED'
+    layer = self.dlg.cmbMonoPoints.currentLayer()
+    if not layer:
+       QMessageBox.critical(self.dlg, "No Layer loaded", "Missing Point Layer")
+       return
+    #Get selected feature
+    feature = self.dlg.cmbMonoFeat.feature()
+    if not feature:
+       QMessageBox.critical(self.dlg, "No Feature loaded", "Missing Point Feature")
+       return
+    #Get the name of the label
+    feature_name = feature["label"]
+    #Get descriptions
+    target_color = self.dlg.txtTrgClr.toPlainText()
+    target_description = self.dlg.txtTrgDscr.toPlainText()
+    gnss_type = self.dlg.txtGnss.toPlainText()
+    srvy_date = feature["survey_date"].toString('dd-MM-yy')
+    layout_name = feature_name+'_'+srvy_date
+    #Determine type of Cround Control Point
+    gcp_bool = feature["is_fixed"]
+    if gcp_bool == 'false':
+         gcp_type = 'MOBILE'
+    else:
+         gcp_type = 'FIXED'
+    #Create layout and open it
+    layout, manager = create_layout(self, layout_name)
+    pc = layout.pageCollection()
+    pc.page(0).setPageSize('A4', QgsLayoutItemPage.Orientation.Portrait)
+    manager.addLayout(layout)
+    y_pos = 7.5
 
+    #Set title label
+    title = create_text(layout, text = feature_name, font_size = 36)
+    title.setFixedSize(QgsLayoutSize(97.5, 20))
+    title.attemptMove(QgsLayoutPoint(7.5, y_pos, QgsUnitTypes.LayoutMillimeters))
 
-     #Create layout and open it
-     layout, manager = create_layout(self, layout_name)
-     pc = layout.pageCollection()
-     pc.page(0).setPageSize('A4', QgsLayoutItemPage.Orientation.Portrait)
-     manager.addLayout(layout)
-     #Set title label
-     title = QgsLayoutItemLabel(layout)
-     title.setText(f"{layout_name}")
-     title_format = QgsTextFormat()
-     title_format.setFont(QFont('Times'))
-     title_format.setSize(36)
-     title.setTextFormat(title_format)
-     title.attemptResize(QgsLayoutSize(40, 20))
-     layout.addLayoutItem(title)
-     title.attemptMove(QgsLayoutPoint(7.5, 7.5, QgsUnitTypes.LayoutMillimeters))
-     #Set Polimi header
-     polimi = QgsLayoutItemLabel(layout)
-     polimi.setText("Politecnico di Milano\nDipartimento di Ingegneria Civile e Ambientale\nSezione di Geodesia e Geomatica")
-     polimi_format = QgsTextFormat()
-     polimi_format.setFont(QFont('Times'))
-     polimi_format.setSize(10)
-     polimi.setTextFormat(polimi_format)
-     polimi.attemptResize(QgsLayoutSize(75, 20))
-     layout.addLayoutItem(polimi)
-     polimi.attemptMove(QgsLayoutPoint(127.5, 7.5, QgsUnitTypes.LayoutMillimeters))
+    #Set Polimi headers
+    polimi_text = "Politecnico di Milano\nDipartimento di Ingegneria Civile e Ambientale\nSezione di Geodesia e Geomatica"
+    polimi = create_text(layout, polimi_text, font_size = 10, HAlign = False)
+    polimi.setFixedSize(QgsLayoutSize(75, 20))
+    polimi.attemptMove(QgsLayoutPoint(127.5, y_pos, QgsUnitTypes.LayoutMillimeters))
+    polimi_path = self.dlg.lnLogo.text()
+    polimi_logo = create_image(layout, polimi_path, 'PolimiLogo')
+    polimi_logo.attemptMove(QgsLayoutPoint(105, y_pos, QgsUnitTypes.LayoutMillimeters))
+    polimi_logo.setFixedSize(QgsLayoutSize(22.5,20))
+    polimi_logo.setFrameEnabled(True)
 
-     #Add Descriptions
-     dscr = QgsLayoutItemLabel(layout)
-     dscr.setText(f"Target: {target_color}\n\nDescrizione: {target_description}\nTipo di punto: {gcp_type}\n\nModalita di rilievo GNSS: {gnss_type}")
-     dscr_format = QgsTextFormat()
-     dscr_format.setFont(QFont('Times'))
-     dscr_format.setSize(12)
-     dscr.setTextFormat(dscr_format)
-     dscr.attemptResize(QgsLayoutSize(195, 70))
-     layout.addLayoutItem(dscr)
-     dscr.attemptMove(QgsLayoutPoint(7.5, 30, QgsUnitTypes.LayoutMillimeters))
+    y_pos += polimi.boundingRect().height()
 
-     #Add Survey Title
-     srvy = QgsLayoutItemLabel(layout)
-     srvy.setText(f"Coordinate {srvy_date}")
-     srvy_format = QgsTextFormat()
-     srvy_format.setFont(QFont('Times'))
-     srvy_format.setSize(12)
-     srvy_format.setForcedBold(True)
-     srvy.setTextFormat(srvy_format)
-     srvy.setHAlign(Qt.AlignCenter)
-     srvy.attemptResize(QgsLayoutSize(195, 7))
-     layout.addLayoutItem(srvy)
-     srvy.attemptMove(QgsLayoutPoint(7.5, 105, QgsUnitTypes.LayoutMillimeters))
+    #Add Descriptions
+    dscr_text = f"Target: {target_color}\n\nDescrizione: {target_description}\nTipo di punto: {gcp_type}\n\nModalita di rilievo GNSS: {gnss_type}"
+    dscr = create_text(layout, dscr_text, font_size = 12, VAlign = False, HAlign = False)
+    dscr.setFixedSize(QgsLayoutSize(195, 50))
+    dscr.setMarginX(0.5)
+    dscr.attemptMove(QgsLayoutPoint(7.5, y_pos, QgsUnitTypes.LayoutMillimeters))
+    y_pos += dscr.boundingRect().height()
+    
 
+    #Add Survey Title
+    srvy_text = f"Coordinate {srvy_date}"
+    srvy = create_text(layout, srvy_text, font_size = 12, bold = True)
+    srvy.setFixedSize(QgsLayoutSize(195, 7.5))
+    srvy.attemptMove(QgsLayoutPoint(7.5, y_pos, QgsUnitTypes.LayoutMillimeters))
+    y_pos += srvy.boundingRect().height()
 
-     #Create table for the coordinates
-     table = QgsLayoutItemTextTable(layout)
-     layout.addMultiFrame(table)
-     cols = [QgsLayoutTableColumn(),QgsLayoutTableColumn(),QgsLayoutTableColumn(), QgsLayoutTableColumn(),QgsLayoutTableColumn(),QgsLayoutTableColumn(),QgsLayoutTableColumn(),QgsLayoutTableColumn()]
-     cols[0].setHeading("X [m]")
-     cols[1].setHeading("Y [m]")
-     cols[2].setHeading("Z [m]")
-     cols[3].setHeading("Lat (j)")
-     cols[4].setHeading("Long (I)")
-     cols[5].setHeading("H ell [m]")
-     cols[6].setHeading("Est [m]")
-     cols[7].setHeading("Nord [m]")
-     table.setColumns(cols)
-    # Add rows
-     table.setContents([['', '', '', '', '', str(feature["h"]), str(feature["east"]), str(feature["north"])]])
-     frame = QgsLayoutFrame(layout, table)
-     frame.attemptResize(QgsLayoutSize(195, 30), True)
-     frame.attemptMove(QgsLayoutPoint(7.5, 110, QgsUnitTypes.LayoutMillimeters))
-     table.addFrame(frame)
-     
+    #Create "Table" format for coordinates
+    headers = ['X [m]', 'Y [m]', 'Z [m]', 'Lat (j)', 'Long (I)', 'H_ell [m]', 'Est [m]', 'Nord [m]']
+    x_marg = 7.5
+    col = 0
+    for head in headers:
+         lbl_txt = f"{head}"
+         label = create_text(layout, lbl_txt, font_size=12)
+         label.setFixedSize(QgsLayoutSize(24.1, 10))
+         label.attemptMove(QgsLayoutPoint(x_marg, y_pos, QgsUnitTypes.LayoutMillimeters))
+         x_marg += label.boundingRect().width()
+    x_marg = 7.5
+    for head in headers:
+         val_obj = self.dlg.tblCoord.item(0,col)
+         if col == 0:
+            y_pos += label.boundingRect().height()
+         if val_obj:
+              val_txt = val_obj.text()
+         else:
+              val_txt = ' '         
+         value = create_text(layout, val_txt, font_size = 12)
+         value.setFixedSize(QgsLayoutSize(24.1, 10))
+         value.attemptMove(QgsLayoutPoint(x_marg, y_pos, QgsUnitTypes.LayoutMillimeters))
+         x_marg += label.boundingRect().width()
+         col += 1
+    y_pos += value.boundingRect().height()
 
-     self.iface.openLayoutDesigner(layout)
+    #Create Photo Title
+    photo_txt = "ORTOFOTO"
+    photo_title = create_text(layout, photo_txt, 12, bold = True)
+    photo_title.setFixedSize(QgsLayoutSize(195,7.5))
+    photo_title.attemptMove(QgsLayoutPoint(7.5, y_pos))
+    y_pos += photo_title.boundingRect().height()
+
+    map = map_single_point_with_labels(layout, feature, layer)
+    #Moves map and sets size
+    map.setFixedSize(QgsLayoutSize(97.5, 297-7.5-y_pos))
+    map.attemptMove(QgsLayoutPoint(7.5, y_pos, QgsUnitTypes.LayoutMillimeters))
+    map.setFrameEnabled(True)
+    #Gets extent from the layer of GCPs and sets it to the map
+    extent = layer.extent().buffered(layer.extent().width()*0.2)
+    map.setExtent(extent)
+    map.zoomToExtent(extent)
+    layout.addLayoutItem(map)
+
+    ##Add Description Images
+    #Upper right image
+    photo_up_path = self.dlg.lnPhoto_1.text()
+    photo_upper = create_image(layout, photo_up_path, 'PhotoUpper')
+    photo_upper.attemptMove(QgsLayoutPoint(105, y_pos, QgsUnitTypes.LayoutMillimeters))
+    photo_upper.setFixedSize(QgsLayoutSize(97.5,297-7.5-y_pos))
+    photo_upper.setFrameEnabled(True)
+    y_pos += photo_upper.boundingRect().height()
+    #Lower right image
+    photo_low_path = self.dlg.lnPhoto_2.text()
+    photo_lower = create_image(layout, photo_low_path, 'PhotoLower')
+    photo_lower.attemptMove(QgsLayoutPoint(105, y_pos, QgsUnitTypes.LayoutMillimeters))
+    photo_lower.setFixedSize(QgsLayoutSize(97.5,297-7.5-y_pos))
+    photo_lower.setFrameEnabled(True)
+
+    #Open layout
+    self.iface.openLayoutDesigner(layout)
+
 
 
                              
