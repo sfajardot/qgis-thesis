@@ -185,70 +185,230 @@ class RasterTester:
         # will be set False in run()
         self.first_start = True
 
-    def enable_bounding_box(self):
-        if self.dlg.chkBB.isChecked():
-            self.dlg.cmbBB.setEnabled(True)
-            self.dlg.cmbBB.repaint()
-        else:
-            self.dlg.cmbBB.setDisabled(True)
-            self.dlg.cmbBB.repaint()
-    def enable_stats_box(self):
-        if self.dlg.chkStats.isChecked():
-            self.dlg.lnOutputStats.setEnabled(True)
-            self.dlg.lnOutputStats.repaint()
-            self.dlg.btnOutputStats.setEnabled(True)
-            self.dlg.btnOutputStats.repaint()
-        else:
-            self.dlg.lnOutputStats.setDisabled(True)
-            self.dlg.lnOutputStats.repaint()
-            self.dlg.btnOutputStats.setDisabled(True)
-            self.dlg.btnOutputStats.repaint()
     def unload(self):
-        """Removes the plugin menu item and icon from QGIS GUI."""
+        """
+        Remove the plugin's menu item and icon from the QGIS interface.
+
+        This function is used when the plugin is unloaded or deactivated. It removes the plugin-related actions 
+        (menu items and toolbar icons) from QGIS, ensuring a clean removal of the plugin UI elements.
+
+        Args:
+        - None.
+
+        Returns:
+        - None, but removes the plugin's actions from the QGIS interface.
+        """
         for action in self.actions:
             self.iface.removePluginMenu(
                 self.tr(u'&Raster Tester'),
                 action)
             self.iface.removeToolBarIcon(action)
 
+    def enable_button(self, chkbox, enblBtn):
+        """
+        Enable or disable a button based on the state of a checkbox.
+
+        This function checks if a specified checkbox is selected (`checked`).
+        If the checkbox is checked, it enables the associated button.
+        If the checkbox is unchecked, it disables the button.
+
+        Args:
+        - chkbox: The checkbox that controls the button's state.
+        - enblBtn: The button to be enabled or disabled based on the checkbox state.
+
+        Returns:
+        - None, but enables or disables the button visually.
+        """
+        if chkbox.isChecked():
+            enblBtn.setEnabled(True)
+            enblBtn.repaint()
+        else:
+            enblBtn.setDisabled(True)
+            enblBtn.repaint()
+
+    def enable_symbology(self, symType):
+        """
+        Enable or disable buttons based on the state of the symbology chosen.
+
+        This function checks if a specified checkbox is selected (`checked`).
+        If the checkbox is checked, it enables the associated button.
+        If the checkbox is unchecked, it disables the button.
+
+        Args:
+        - symType: The type of symbology given by a combo Box.
+        - enblBtn: The button to be enabled or disabled based on the checkbox state.
+
+        Returns:
+        - None, but enables or disables the button visually.
+        """
+        if symType.currentText() == 'Graduated':
+            self.dlg.cmbFieldValue.setEnabled(True)
+            self.dlg.cmbGradMeth.setEnabled(True)
+            self.dlg.spbNumClass.setEnabled(True)
+            self.dlg.cmbXMag.setEnabled(False)
+            self.dlg.cmbYMag.setEnabled(False)
+            self.dlg.spbScale.setEnabled(False)
+        elif symType.currentText() == 'Vector Field Marker':
+            self.dlg.cmbFieldValue.setEnabled(False)
+            self.dlg.cmbGradMeth.setEnabled(False)
+            self.dlg.spbNumClass.setEnabled(False)
+            self.dlg.cmbXMag.setEnabled(True)
+            self.dlg.cmbYMag.setEnabled(True)
+            self.dlg.spbScale.setEnabled(True)
+
+
+
+
+
     def select_output_file(self, default_name, file_filter, line_edit):
-        """Open a file dialog to select a file."""
+        """
+        Open a file dialog to select a save path for an output file.
+
+        This function prompts the user to select the location and filename for saving an output file (e.g., a raster file).
+        The file path chosen by the user is displayed in the specified line edit widget.
+
+        Args:
+        - default_name: The default name or directory path for the output file.
+        - file_filter: The file type filter (e.g., 'GTiff (*.tif)') for the save dialog.
+        - line_edit: The QLineEdit widget to display the selected file path.
+
+        Returns:
+        - None, but updates the QLineEdit with the selected file path.
+        """
+
         filename, _filter = QFileDialog.getSaveFileName(
             self.dlg, "Select output filename and destination", default_name, file_filter)
         if filename:
             line_edit.setText(filename)
+
     def select_input_file(self, line_edit):
-        """Open a file dialog to select a logo image (JPG or PNG)"""
+        """
+        Open a file dialog to select an image file (JPG or PNG) for input.
+
+        This function prompts the user to select an image file (JPG or PNG), such as a logo, for input. 
+        The selected file path is displayed in the specified line edit widget.
+
+        Args:
+        - line_edit: The QLineEdit widget to display the selected image file path.
+
+        Returns:
+        - None, but updates the QLineEdit with the selected file path.
+        """
         file_filter = 'Image Files (*.jpg, *png)'
         filename, _filter = QFileDialog.getOpenFileName(
             self.dlg, "Select Image File","", file_filter)
         if filename:
             line_edit.setText(filename)
     
-    def raster_processing(self):
+    def processing_tab(self):
+        """
+        Process the elevation change task when the corresponding button is pressed.
+
+        This function logs a message when the 'Processing' button is pressed. It then calls the `elevation_change` 
+        function, which calculates the difference between two raster layers, and closes the dialog after processing.
+
+        Args:
+        - None, but relies on UI inputs for raster layers, bounding box options, and output paths.
+
+        Returns:
+        - None, but performs elevation change processing and closes the dialog.
+        """
+
         QgsMessageLog.logMessage('Processing button pressed', 'vol test', Qgis.Info)
-        elevation_change(self)
+        elevation_change(self, self.dlg.lnOutput, self.dlg.cmbOld, self.dlg.cmbNew,
+                         self.dlg.chkBB, self.dlg.cmbBB, self.dlg.chkStats, self.dlg.lnOutputStats)
         self.dlg.close()
 
-    def report_layout(self):
+    def layout_tab(self):
+        """
+        Process the graduated map layout when the corresponding button is pressed.
+
+        This function logs a message when the 'Layout' button is pressed. It then calls the `symbolized_map` function,
+        which creates a graduated map layout with the selected symbology and field values, and closes the dialog.
+
+        Args:
+        - None, but relies on UI inputs for the points layer, field values, and layout options.
+
+        Returns:
+        - None, but performs map layout processing and closes the dialog.
+        """
+
         QgsMessageLog.logMessage('Layout button pressed', 'vol test', Qgis.Info)
-        layout_report(self)
+        symbolized_map(self, self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue, self.dlg.cmbGradMeth,
+                      self.dlg.spbNumClass, self.dlg.cmbSymType, self.dlg.lnLayoutName, self.dlg.cmbXMag,
+                      self.dlg.cmbYMag, self.dlg.spbScale)
         self.dlg.close()
 
-    def monography(self):
+    def monography_tab(self):
+        """
+        Process the monograph creation task when the corresponding button is pressed.
+
+        This function logs a message when the 'Monography' button is pressed. It calls the `create_monograph` function,
+        which generates a monograph layout with the selected feature, descriptions, and images, and then closes the dialog.
+
+        Args:
+        - None, but relies on UI inputs for the point layer, feature, target color, description, GNSS info, and image paths.
+
+        Returns:
+        - None, but performs monograph creation and closes the dialog.
+        """
         QgsMessageLog.logMessage('Monography button pressed', 'vol test', Qgis.Info)
-        create_monograph(self)
+        create_monograph(self, self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.txtTrgClr,
+                         self.dlg.txtTrgDscr, self.dlg.txtGnss, self.dlg.lnLogo, self.dlg.lnPhoto_1,
+                         self.dlg.lnPhoto_2, self.dlg.tblCoord)
         self.dlg.close()
 
-    def populate_fields(self):
-        self.dlg.cmbFieldValue.setLayer(self.dlg.cmbLayoutPoints.currentLayer())
-        self.dlg.cmbFieldValue.setFilters(QgsFieldProxyModel.Numeric)
+    def populate_fields(self, cmbPopulator, cmbPopulated, QgsFilter = None):
+        """
+        Populate a combo box with data from a selected layer, optionally applying a filter.
 
-    def populate_features(self):
-        self.dlg.cmbMonoFeat.setLayer(self.dlg.cmbMonoPoints.currentLayer())
+        This function sets the layer for the `cmbPopulated` combo box based on the currently selected layer in `cmbPopulator`.
+        Optionally, it applies a filter (`QgsFilter`) to restrict the fields shown in the populated combo box.
+
+        Args:
+        - cmbPopulator: The combo box that holds the currently selected layer.
+        - cmbPopulated: The combo box to be populated with fields from the selected layer.
+        - QgsFilter (optional): A filter to restrict the fields, such as `QgsFieldProxyModel.Numeric` for numeric fields.
+
+        Returns:
+        - None, but updates the `cmbPopulated` combo box with fields from the selected layer.
+        """
+        cmbPopulated.setLayer(cmbPopulator.currentLayer())
+        if QgsFilter:
+            cmbPopulated.setFilters(QgsFilter)
 
     def close_dialog(self):
+        """
+        Close the dialog window.
+
+        This function simply closes the dialog window when called.
+
+        Args:
+        - None.
+
+        Returns:
+        - None, but closes the dialog window.
+        """
         self.dlg.close()
+
+    def clear_data(self, lnWdgts, tblWdgts):
+        """
+        Clear the contents of specified line edit and table widgets.
+
+        This function iterates through a list of line edit widgets (`lnWdgts`) and clears their contents.
+        It also iterates through a list of table widgets (`tblWdgts`) and clears all the data in their contents.
+
+        Args:
+        - lnWdgts: A list of line edit widgets (QLineEdit) to be cleared.
+        - tblWdgts: A list of table widgets (QTableWidget) to be cleared.
+
+        Returns:
+        - None, but clears the content of the specified line and table widgets.
+        """
+        for lnWdgt in lnWdgts:
+            lnWdgt.clear()
+        for tblWdgt in tblWdgts:
+            tblWdgt.clearContents()
 
     def run(self):
         """Run method to initialize the plugin."""
@@ -268,19 +428,51 @@ class RasterTester:
             self.dlg.btnPhoto_2.clicked.connect(lambda: self.select_input_file(
                 self.dlg.lnPhoto_2))
 
-            # Processing and layout actions
-            self.dlg.btnProcess.accepted.connect(self.raster_processing)
+            # Processing
+            self.dlg.btnProcess.accepted.connect(self.processing_tab)
             self.dlg.btnProcess.rejected.connect(self.close_dialog)
-            self.dlg.btnLayout.accepted.connect(self.report_layout)
-            self.dlg.btnLayout.rejected.connect(self.close_dialog)
+            self.dlg.btnProcess.accepted.connect(lambda: self.clear_data([self.dlg.lnOutput, self.dlg.lnOutputStats], []))
+            self.dlg.btnProcess.rejected.connect(lambda: self.clear_data([self.dlg.lnOutput, self.dlg.lnOutputStats], []))
 
+            #Layout actions
+            self.dlg.btnLayout.accepted.connect(self.layout_tab)
+            self.dlg.btnLayout.rejected.connect(self.close_dialog)
+            self.dlg.btnLayout.rejected.connect(lambda: self.clear_data([self.dlg.lnLayoutName], []))
+            self.dlg.btnLayout.rejected.connect(lambda: self.clear_data([self.dlg.lnLayoutName], []))
             # Monography actions
-            self.dlg.btnMono.accepted.connect(self.monography)
+            self.dlg.btnMono.accepted.connect(self.monography_tab)
             self.dlg.btnMono.rejected.connect(self.close_dialog)
+            self.dlg.btnMono.accepted.connect(lambda: self.clear_data([self.dlg.lnLogo,\
+                                                                            self.dlg.lnPhoto_1,\
+                                                                            self.dlg.lnPhoto_2,\
+                                                                            self.dlg.txtGnss,\
+                                                                            self.dlg.txtTrgClr,\
+                                                                            self.dlg.txtTrgDscr],\
+                                                                            [self.dlg.tblCoord]))
+            self.dlg.btnMono.rejected.connect(lambda: self.clear_data([self.dlg.lnLogo,\
+                                                                            self.dlg.lnPhoto_1,\
+                                                                            self.dlg.lnPhoto_2,\
+                                                                            self.dlg.txtGnss,\
+                                                                            self.dlg.txtTrgClr,\
+                                                                            self.dlg.txtTrgDscr],\
+                                                                            [self.dlg.tblCoord]))
+            self.dlg.btnClearAllMono.clicked.connect(lambda: self.clear_data([self.dlg.lnLogo,\
+                                                                            self.dlg.lnPhoto_1,\
+                                                                            self.dlg.lnPhoto_2,\
+                                                                            self.dlg.txtGnss,\
+                                                                            self.dlg.txtTrgClr,\
+                                                                            self.dlg.txtTrgDscr],\
+                                                                            [self.dlg.tblCoord]))
+            self.dlg.btnClearTable.clicked.connect(lambda: self.clear_data([], [self.dlg.tblCoord]))
 
             # Populate fields and features
-            self.dlg.cmbLayoutPoints.layerChanged.connect(self.populate_fields)
-            self.dlg.cmbMonoPoints.layerChanged.connect(self.populate_features)
+            self.dlg.cmbLayoutPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue,
+                                                                                        QgsFieldProxyModel.Numeric))
+            self.dlg.cmbLayoutPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbXMag,
+                                                                                        QgsFieldProxyModel.Numeric))
+            self.dlg.cmbLayoutPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbYMag,
+                                                                                        QgsFieldProxyModel.Numeric))
+            self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat))
 
             # Set filters for combo boxes
             self.dlg.cmbOld.setFilters(QgsMapLayerProxyModel.RasterLayer)
@@ -290,20 +482,30 @@ class RasterTester:
             self.dlg.cmbMonoPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
 
             # Initialize field and feature values
-            self.populate_fields()
-            self.populate_features()
+            self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue, QgsFieldProxyModel.Numeric)
+            self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbXMag, QgsFieldProxyModel.Numeric)
+            self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbYMag, QgsFieldProxyModel.Numeric)
+            self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat)
+            self.enable_symbology(self.dlg.cmbSymType)
             
              
 
         # show the dialog
-        self.dlg.chkBB.clicked.connect(self.enable_bounding_box)
-        self.dlg.chkStats.clicked.connect(self.enable_stats_box)
+        #Do the dynamic connections for buttons that enbale/disable functions
+        self.dlg.chkBB.clicked.connect(lambda: self.enable_button(self.dlg.chkBB, self.dlg.cmbBB ))
+        self.dlg.chkStats.clicked.connect(lambda: self.enable_button(self.dlg.chkStats, self.dlg.lnOutputStats))
+        self.dlg.chkStats.clicked.connect(lambda: self.enable_button(self.dlg.chkStats, self.dlg.btnOutputStats))
+        self.dlg.cmbSymType.currentTextChanged.connect(lambda: self.enable_symbology(self.dlg.cmbSymType))
+        
+        
+        #Show the dialogue
         self.dlg.show()
+
         result = self.dlg.exec_()
         if result:
             if self.dlg.btnProcess.accepted == True:
-                self.raster_processing
+                self.processing_tab
             if self.dlg.btnLayout.accepted == True:
-                self.report_layout
+                self.layout_tab
             if self.dlg.btnMono.accepted == True:
-                self.create_monograph
+                self.monography_tab
