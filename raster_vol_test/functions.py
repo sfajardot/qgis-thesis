@@ -8,12 +8,12 @@ from qgis.core import Qgis, QgsProject, QgsPrintLayout, QgsMessageLog, QgsLayout
      QgsClassificationEqualInterval, QgsClassificationJenks, QgsClassificationQuantile,\
      QgsRuleBasedRenderer, QgsLayoutSize, QgsLayoutItemPicture, QgsMarkerSymbol,\
      QgsLayoutItemLabel, QgsTextFormat, QgsVectorLayerSimpleLabeling, QgsPalLayerSettings,\
-     QgsTextBufferSettings
+     QgsTextBufferSettings, QgsLayerTree, QgsLayoutItemLegend, QgsLayoutItemScaleBar
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.utils import iface
 from PyQt5.QtWidgets import  QMessageBox
 from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QPointF
 from qgis import processing
 
 
@@ -167,6 +167,7 @@ def add_map(self, e, layout, layout_height, layout_width, map_height, map_width,
     - float: The real width of the map after margins.
     - float: The x-offset for centering the map.
     - float: The y-offset for centering the map.
+    - QgsLayoutItemMap: The map item added to the layout.
     """
     QgsMessageLog.logMessage("Adding map to layout", 'vol test', Qgis.Info)
     map_width = map_width - margin
@@ -183,7 +184,79 @@ def add_map(self, e, layout, layout_height, layout_width, map_height, map_width,
     my_map.setFrameEnabled(True)
     my_map.attemptMove(QgsLayoutPoint(x_offset, y_offset, QgsUnitTypes.LayoutMillimeters))
     layout.addLayoutItem(my_map)
-    return map_real_height, map_real_width, x_offset, y_offset
+    return map_real_height, map_real_width, x_offset, y_offset, my_map
+
+def create_legend(layout, layer, map):
+    """
+    Create a legend for a map within the layout.
+
+    Args:
+    - layout (QgsPrintLayout): The layout to which the legend is added.
+    - layer (QgsVectorLayer): The layer for which the legend is created.
+    - map (QgsLayoutItemMap): The map item to link the legend.
+
+    Returns:
+    - QgsLayoutItemLegend: The legend item added to the layout.
+    """
+    root = QgsLayerTree()
+    root.addLayer(layer)
+    legend = QgsLayoutItemLegend(layout)
+    legend.model().setRootGroup(root)
+    legend.setLinkedMap(map)
+    layout.addLayoutItem(legend)
+    return legend
+
+def create_north_arrow(layout):
+    """
+    Create a north arrow for the layout.
+
+    This function adds a default north arrow (SVG format) to the specified layout. 
+    The north arrow is loaded from the default QGIS resource.
+
+    Args:
+    - layout (QgsPrintLayout): The layout to which the north arrow is added.
+
+    Returns:
+    - QgsLayoutItemPicture: The north arrow item added to the layout.
+    """
+    north = QgsLayoutItemPicture(layout)
+    north.setMode(QgsLayoutItemPicture.FormatSVG)
+    north.setPicturePath(":/images/north_arrows/layout_default_north_arrow.svg")
+    layout.addLayoutItem(north)
+    return north
+
+def create_scale_bar(layout, map):
+    """
+    Create a scale bar for the map in the layout.
+
+    This function adds a scale bar to the layout and links it to the specified map.
+    The scale bar is customized with the 'Single Box' style, uses kilometers as the unit, 
+    and applies appropriate text formatting.
+
+    Args:
+    - layout (QgsPrintLayout): The layout to which the scale bar is added.
+    - map (QgsLayoutItemMap): The map item to which the scale bar is linked.
+
+    Returns:
+    - QgsLayoutItemScaleBar: The scale bar item added to the layout.
+    """
+    scale = QgsLayoutItemScaleBar(layout)
+    scale.setStyle('Single Box')
+    scale_format = QgsTextFormat()
+    scale_format.setFont(QFont("Times"))
+    scale_format.setSize(12)
+    scale.setTextFormat(scale_format)
+    scale.applyDefaultSize(QgsUnitTypes.DistanceMeters)
+    scale.setMapUnitsPerScaleBarUnit(1000)
+    scale.setNumberOfSegments(2)
+    scale.setUnitsPerSegment(1*500)
+    scale.setUnitLabel("km")
+    scale.setLinkedMap(map)
+    scale.setBackgroundEnabled(True)
+    layout.addLayoutItem(scale)
+    return scale
+
+
 
 def run_layout(self, extent, layoutName):
     """
@@ -194,7 +267,7 @@ def run_layout(self, extent, layoutName):
     - layoutName (str): The name of the layout to create or replace.
 
     Returns:
-    - None, but it adds the layout to the layout manager and opens the layout designer.
+    - my_map (QgsLayoutItemMap): The map item added to the layout..
     """
     #The extent of the layput is the old Year Raster
     map_width = extent.xMaximum() - extent.xMinimum()
@@ -223,11 +296,12 @@ def run_layout(self, extent, layoutName):
                                                         map_height, map_width, scale_ratio)
 
     # Add map
-    add_map(self, extent, layout, layout_height, \
+    _,_,_,_,my_map = add_map(self, extent, layout, layout_height, \
             layout_width, map_height, map_width, 10, my_map)
 
     manager.addLayout(layout)
     self.iface.openLayoutDesigner(layout)
+    return my_map, layout
 
 def graduated_symbology(self, layer, attribute_name, classification_method, num_classes):
     """
@@ -274,6 +348,23 @@ def graduated_symbology(self, layer, attribute_name, classification_method, num_
     layer.triggerRepaint()
 
 def vector_field_symbology(self, layer, xMag, yMag, scaleFactor):
+    """
+    Apply vector field symbology to a vector layer.
+
+    This function sets up a vector field symbology on a given vector layer, using two attributes 
+    (xMag and yMag) representing the eastward and northward displacements. The scale factor is 
+    applied to adjust the size of the arrows representing the vector field.
+
+    Args:
+    - layer (QgsVectorLayer): The vector layer to which the symbology is applied.
+    - xMag (str): The field name for the eastward displacement (X component of the vector).
+    - yMag (str): The field name for the northward displacement (Y component of the vector).
+    - scaleFactor (float): The scale factor applied to the vector field symbols.
+
+    Returns:
+    - None: The function directly modifies the layer's symbology and repaints it.
+    """
+    
     # Create a symbol with a vector field symbol layer
     symbol = QgsMarkerSymbol.createSimple({'name': 'circle', 'size': '3'})
     
@@ -286,6 +377,7 @@ def vector_field_symbology(self, layer, xMag, yMag, scaleFactor):
     vector_field.setXAttribute(east_field)
     vector_field.setYAttribute(north_field)
     vector_field.setScale(scaleFactor)
+    vector_field.setColor(QColor("black"))
 
 
 
@@ -336,8 +428,22 @@ def symbolized_map(self, cmbLayoutPoints, cmbFieldValue, cmbGradMeth, spbNumClas
     points = cmbLayoutPoints.currentLayer()
     #Adds a 10% buffer to the extent of the map so corner points are more visible
     extent = points.extent().buffered(points.extent().width()*0.1)
-    run_layout(self, extent, layoutName)
+    my_map, layout= run_layout(self, extent, layoutName)
+    map_pos = my_map.pagePos()
     QgsMessageLog.logMessage("Layout Created", 'vol test', Qgis.Info)
+    map_width = my_map.boundingRect().width()
+    map_height = my_map.boundingRect().height()
+    #Adds legend to map
+    ## CURRENTLY UNAVAILABLE DUE TO QGIS CRASH< NO DOCUMENTATION ON HOW TO FIX QGIS bug
+    #legend = create_legend(layout, layer, my_map)
+    north = create_north_arrow(layout)
+    north.attemptResize(QgsLayoutSize(10,10))
+    north.attemptMove(QgsLayoutPoint(map_pos), QgsUnitTypes.LayoutMillimeters)
+
+    scale = create_scale_bar(layout, my_map)
+    scale.attemptResize(QgsLayoutSize(map_width, 13.2))
+    scale_pos = map_pos + QPointF(0, map_height - scale.boundingRect().height())
+    scale.attemptMove(QgsLayoutPoint(scale_pos), QgsUnitTypes.LayoutMillimeters)
 ########################################################################################
 
 ######################### Functions for Processing Tab #################################
@@ -573,6 +679,7 @@ def create_image(layout, filepath, idName):
     picture = QgsLayoutItemPicture(layout)
     picture.setPicturePath(filepath)
     picture.setId(idName)
+    picture.setPictureAnchor(4)
     layout.addLayoutItem(picture)
     return picture
 
@@ -831,20 +938,32 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     map.setExtent(extent)
     map.zoomToExtent(extent)
     layout.addLayoutItem(map)
+    # Add scale bar
+    scale = create_scale_bar(layout, map)
+    scale.attemptResize(QgsLayoutSize(10,10))
+    scale_pos = y_pos + map.boundingRect().height()- scale.boundingRect().height()
+    scale.attemptMove(QgsLayoutPoint(7.5, scale_pos))
+    #Add North Arrow
+    north = create_north_arrow(layout)
+    north.attemptResize(QgsLayoutSize(10,10))
+    north_pos = map.pagePos()
+    north.attemptMove(QgsLayoutPoint(north_pos, QgsUnitTypes.LayoutMillimeters))
+
 
     ##Add Description Images
     #Upper right image
     photo_up_path = lnPhoto_1.text()
-    photo_upper = create_image(layout, photo_up_path, 'PhotoUpper')
-    photo_upper.attemptMove(QgsLayoutPoint(105, y_pos, QgsUnitTypes.LayoutMillimeters))
-    photo_upper.setFixedSize(QgsLayoutSize(97.5,297-7.5-y_pos))
-    photo_upper.setFrameEnabled(True)
-    y_pos += photo_upper.boundingRect().height()
+    if photo_up_path:
+        photo_upper = create_image(layout, photo_up_path, 'PhotoUpper')
+        photo_upper.attemptMove(QgsLayoutPoint(105, y_pos, QgsUnitTypes.LayoutMillimeters))
+        photo_upper.setFixedSize(QgsLayoutSize(97.5,((297-7.5-y_pos)/2)))
+        photo_upper.setFrameEnabled(True)
+        y_pos += photo_upper.boundingRect().height()
     #Lower right image
     photo_low_path = lnPhoto_2.text()
     photo_lower = create_image(layout, photo_low_path, 'PhotoLower')
     photo_lower.attemptMove(QgsLayoutPoint(105, y_pos, QgsUnitTypes.LayoutMillimeters))
-    photo_lower.setFixedSize(QgsLayoutSize(97.5,297-7.5-y_pos))
+    photo_lower.setFixedSize(QgsLayoutSize(97.5,((297-7.5-y_pos))))
     photo_lower.setFrameEnabled(True)
 
     #Open layout
