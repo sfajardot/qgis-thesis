@@ -10,7 +10,8 @@ from qgis.core import Qgis, QgsProject, QgsPrintLayout, QgsMessageLog, QgsLayout
      QgsLayoutItemLabel, QgsTextFormat, QgsVectorLayerSimpleLabeling, QgsPalLayerSettings,\
      QgsTextBufferSettings, QgsLayerTree, QgsLayoutItemLegend, QgsLayoutItemScaleBar,\
      QgsGeometry, QgsCoordinateReferenceSystem, QgsCoordinateTransform
-from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
+from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry, QgsInterpolator,\
+     QgsIDWInterpolator, QgsTinInterpolator, QgsGridFileWriter
 from qgis.utils import iface
 from PyQt5.QtWidgets import  QMessageBox
 from PyQt5.QtGui import QFont
@@ -1018,5 +1019,47 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     self.iface.openLayoutDesigner(layout)
 ##########################################################################################
 
+#######Interpolator functions###################
+def interpolator(self, cmbInterpolationLayer, cmbInterpolationField, cmbInterpolationType, lnOutputInter, spbResolution, spbWeight):
+    output_path = lnOutputInter.text()
+    layer = cmbInterpolationLayer.currentLayer()
+    if not layer:
+       QMessageBox.critical(self.dlg, "No Layer loaded", "Missing Point Layer")
+       return
+    field = cmbInterpolationField.currentField()
+    if not field:
+       QMessageBox.critical(self.dlg, "No Field Found", "Missing Field")
+       return
+    fields = layer.fields()
+    idxField = fields.indexFromName(field)
+    inter_type = cmbInterpolationType.currentText()
+    res = spbResolution.value()
+    weight = spbWeight.value()
+    rect = layer.extent()
+    ncol = int((rect.xMaximum() - rect.xMinimum())/res)
+    nrow = int((rect.yMaximum() - rect.yMinimum())/res)
+    layer_data = QgsInterpolator.LayerData()
+    layer_data.source = layer
+    layer_data.zCoordInterpolation=False
+    layer_data.interpolationAttribute = idxField
+    layer_data.sourceType = 0 
+    if inter_type == 'IDW':
+        idw_interpolator = QgsIDWInterpolator([layer_data])
+        idw_interpolator.setDistanceCoefficient(weight)
+        output = QgsGridFileWriter(idw_interpolator, output_path, rect, ncol, nrow)
+        output.writeFile()
+        r_name = 'IDW'+str(weight)+'_'+field
+        iface.addRasterLayer(output_path, r_name)
+        #TIN Interpolation is not giving expected values
+    if inter_type == 'TIN':
+        tin_interpolation_method = QgsTinInterpolator.Linear
+        tin_interpolator = QgsTinInterpolator([layer_data], tin_interpolation_method)
+        output = QgsGridFileWriter(tin_interpolator, output_path, rect, ncol, nrow)
+        output.writeFile()
+        r_name = 'TIN'+'_'+field
+        iface.addRasterLayer(output_path, r_name)
 
-                             
+
+
+
+    

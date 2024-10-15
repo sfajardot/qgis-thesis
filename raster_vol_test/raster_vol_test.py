@@ -254,6 +254,12 @@ class RasterTester:
             self.dlg.cmbYMag.setEnabled(True)
             self.dlg.spbScale.setEnabled(True)
 
+    def enable_weight(self, cmbInterpolationType):
+        if cmbInterpolationType.currentText() == 'IDW':
+            self.dlg.spbWeight.setEnabled(True)
+        else:
+            self.dlg.spbWeight.setEnabled(False)
+
 
 
 
@@ -417,6 +423,13 @@ class RasterTester:
         for tblWdgt in tblWdgts:
             tblWdgt.clearContents()
 
+    def interpolation_tab(self):
+        QgsMessageLog.logMessage('Interpolation button pressed', 'vol test', Qgis.Info)
+        interpolator(self, self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField,
+                     self.dlg.cmbInterpolationType, self.dlg.lnOutputInter, self.dlg.spbResolution,
+                     self.dlg.spbWeight)
+        self.dlg.close()
+
     def run(self):
         """Run method to initialize the plugin."""
         if self.first_start:
@@ -428,6 +441,8 @@ class RasterTester:
                 'ElevationChange', 'GeoTIFF(*.tif)', self.dlg.lnOutput))
             self.dlg.btnOutputStats.clicked.connect(lambda: self.select_output_file(
                 'RasterStatistics', 'csv(*.csv)', self.dlg.lnOutputStats))
+            self.dlg.btnOutputInter.clicked.connect(lambda: self.select_output_file(
+                'Interpolation', 'GeoTiff(*.tif)', self.dlg.lnOutputInter))
             self.dlg.btnLogo.clicked.connect(lambda: self.select_input_file(
                 self.dlg.lnLogo))
             self.dlg.btnPhoto_1.clicked.connect(lambda: self.select_input_file(
@@ -459,6 +474,10 @@ class RasterTester:
                                                                               self.dlg.lnPhoto_1, self.dlg.lnPhoto_2,
                                                                               self.dlg.txtGnss, self.dlg.txtTrgClr, self.dlg.txtTrgDscr]))
 
+            #Interpolation actions
+            self.dlg.btnInterpolation.accepted.connect(self.interpolation_tab)
+            self.dlg.btnInterpolation.rejected.connect(self.close_dialog)
+
             # Populate fields for Layout Tabs
             self.dlg.cmbLayoutPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue,
                                                                                         QgsFieldProxyModel.Numeric))
@@ -475,6 +494,10 @@ class RasterTester:
             #populate feature points for monography
             self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.populate_list(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.cmbFieldLabel))
             self.dlg.cmbFieldLabel.fieldChanged.connect(lambda: self.populate_list(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.cmbFieldLabel))
+            
+            #populate fields for interpolation combobox
+            self.dlg.cmbInterpolationLayer.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField,
+                                                                                        QgsFieldProxyModel.Numeric))
 
             # Set filters for combo boxes
             self.dlg.cmbOld.setFilters(QgsMapLayerProxyModel.RasterLayer)
@@ -482,6 +505,7 @@ class RasterTester:
             self.dlg.cmbBB.setFilters(QgsMapLayerProxyModel.PolygonLayer)
             self.dlg.cmbLayoutPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
             self.dlg.cmbMonoPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
+            self.dlg.cmbInterpolationLayer.setFilters(QgsMapLayerProxyModel.PointLayer)
 
             # Initialize field and feature values
             self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue, QgsFieldProxyModel.Numeric)
@@ -491,7 +515,9 @@ class RasterTester:
             self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbFieldSurvey, QgsFilter=QgsFieldProxyModel.Date)
             self.populate_list(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.cmbFieldLabel)
             self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbHeight)
+            self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField, QgsFieldProxyModel.Numeric)
             self.enable_symbology(self.dlg.cmbSymType)
+            self.enable_weight(self.dlg.cmbInterpolationType)
             
              
 
@@ -501,7 +527,7 @@ class RasterTester:
         self.dlg.chkStats.clicked.connect(lambda: self.enable_button(self.dlg.chkStats, self.dlg.lnOutputStats))
         self.dlg.chkStats.clicked.connect(lambda: self.enable_button(self.dlg.chkStats, self.dlg.btnOutputStats))
         self.dlg.cmbSymType.currentTextChanged.connect(lambda: self.enable_symbology(self.dlg.cmbSymType))
-        
+        self.dlg.cmbInterpolationType.currentTextChanged.connect(lambda: self.enable_weight(self.dlg.cmbInterpolationType))
         
         #Show the dialogue
         self.dlg.show()
@@ -514,3 +540,5 @@ class RasterTester:
                 self.layout_tab
             if self.dlg.btnMono.accepted == True:
                 self.monography_tab
+            if self.dlg.btnInterpolation.accepted == True:
+                self.interpolation_tab
