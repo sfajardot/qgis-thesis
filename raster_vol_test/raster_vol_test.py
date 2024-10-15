@@ -353,7 +353,8 @@ class RasterTester:
         QgsMessageLog.logMessage('Monography button pressed', 'vol test', Qgis.Info)
         create_monograph(self, self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.txtTrgClr,
                          self.dlg.txtTrgDscr, self.dlg.txtGnss, self.dlg.lnLogo, self.dlg.lnPhoto_1,
-                         self.dlg.lnPhoto_2, self.dlg.tblCoord)
+                         self.dlg.lnPhoto_2, self.dlg.lnInst, self.dlg.cmbFieldLabel, self.dlg.cmbFieldSurvey,
+                         self.dlg.spbNumSrvy, self.dlg.cmbHeight)
         self.dlg.close()
 
     def populate_fields(self, cmbPopulator, cmbPopulated, QgsFilter = None):
@@ -375,6 +376,14 @@ class RasterTester:
         if QgsFilter:
             cmbPopulated.setFilters(QgsFilter)
 
+    def populate_list(self, cmbPopulator, cmbPopulated, cmbAttributeField):
+        # Get the layer and field
+        layer = cmbPopulator.currentLayer()
+        field_name = cmbAttributeField.currentField()
+
+        cmbPopulated.setLayer(layer)
+        cmbPopulated.setDisplayExpression(field_name)
+
     def close_dialog(self):
         """
         Close the dialog window.
@@ -389,7 +398,7 @@ class RasterTester:
         """
         self.dlg.close()
 
-    def clear_data(self, lnWdgts, tblWdgts):
+    def clear_data(self, lnWdgts =[], tblWdgts=[]):
         """
         Clear the contents of specified line edit and table widgets.
 
@@ -435,42 +444,37 @@ class RasterTester:
             #Layout actions
             self.dlg.btnLayout.accepted.connect(self.layout_tab)
             self.dlg.btnLayout.rejected.connect(self.close_dialog)
-            self.dlg.btnLayout.rejected.connect(lambda: self.clear_data([self.dlg.lnLayoutName], []))
-            self.dlg.btnLayout.rejected.connect(lambda: self.clear_data([self.dlg.lnLayoutName], []))
+            self.dlg.btnLayout.accepted.connect(lambda: self.clear_data([self.dlg.lnLayoutName]))
+            self.dlg.btnLayout.rejected.connect(lambda: self.clear_data([self.dlg.lnLayoutName]))
             # Monography actions
             self.dlg.btnMono.accepted.connect(self.monography_tab)
             self.dlg.btnMono.rejected.connect(self.close_dialog)
-            self.dlg.btnMono.accepted.connect(lambda: self.clear_data([self.dlg.lnLogo,\
-                                                                            self.dlg.lnPhoto_1,\
-                                                                            self.dlg.lnPhoto_2,\
-                                                                            self.dlg.txtGnss,\
-                                                                            self.dlg.txtTrgClr,\
-                                                                            self.dlg.txtTrgDscr],\
-                                                                            [self.dlg.tblCoord]))
-            self.dlg.btnMono.rejected.connect(lambda: self.clear_data([self.dlg.lnLogo,\
-                                                                            self.dlg.lnPhoto_1,\
-                                                                            self.dlg.lnPhoto_2,\
-                                                                            self.dlg.txtGnss,\
-                                                                            self.dlg.txtTrgClr,\
-                                                                            self.dlg.txtTrgDscr],\
-                                                                            [self.dlg.tblCoord]))
-            self.dlg.btnClearAllMono.clicked.connect(lambda: self.clear_data([self.dlg.lnLogo,\
-                                                                            self.dlg.lnPhoto_1,\
-                                                                            self.dlg.lnPhoto_2,\
-                                                                            self.dlg.txtGnss,\
-                                                                            self.dlg.txtTrgClr,\
-                                                                            self.dlg.txtTrgDscr],\
-                                                                            [self.dlg.tblCoord]))
-            self.dlg.btnClearTable.clicked.connect(lambda: self.clear_data([], [self.dlg.tblCoord]))
+            self.dlg.btnMono.accepted.connect(lambda: self.clear_data([self.dlg.lnInst, self.dlg.lnLogo,
+                                                                              self.dlg.lnPhoto_1, self.dlg.lnPhoto_2,
+                                                                              self.dlg.txtGnss, self.dlg.txtTrgClr, self.dlg.txtTrgDscr]))
+            self.dlg.btnMono.rejected.connect(lambda: self.clear_data([self.dlg.lnInst, self.dlg.lnLogo,
+                                                                              self.dlg.lnPhoto_1, self.dlg.lnPhoto_2,
+                                                                              self.dlg.txtGnss, self.dlg.txtTrgClr, self.dlg.txtTrgDscr]))
+            self.dlg.btnClearAllMono.clicked.connect(lambda: self.clear_data([self.dlg.lnInst, self.dlg.lnLogo,
+                                                                              self.dlg.lnPhoto_1, self.dlg.lnPhoto_2,
+                                                                              self.dlg.txtGnss, self.dlg.txtTrgClr, self.dlg.txtTrgDscr]))
 
-            # Populate fields and features
+            # Populate fields for Layout Tabs
             self.dlg.cmbLayoutPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue,
                                                                                         QgsFieldProxyModel.Numeric))
             self.dlg.cmbLayoutPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbXMag,
                                                                                         QgsFieldProxyModel.Numeric))
             self.dlg.cmbLayoutPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbYMag,
                                                                                         QgsFieldProxyModel.Numeric))
-            self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat))
+            #Populate fields for survey and label name
+            self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbFieldLabel))
+            self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbFieldSurvey,  
+                                                                                     QgsFilter=QgsFieldProxyModel.Date))
+            self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbHeight))
+
+            #populate feature points for monography
+            self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.populate_list(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.cmbFieldLabel))
+            self.dlg.cmbFieldLabel.fieldChanged.connect(lambda: self.populate_list(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.cmbFieldLabel))
 
             # Set filters for combo boxes
             self.dlg.cmbOld.setFilters(QgsMapLayerProxyModel.RasterLayer)
@@ -483,7 +487,10 @@ class RasterTester:
             self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue, QgsFieldProxyModel.Numeric)
             self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbXMag, QgsFieldProxyModel.Numeric)
             self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbYMag, QgsFieldProxyModel.Numeric)
-            self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat)
+            self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbFieldLabel)
+            self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbFieldSurvey, QgsFilter=QgsFieldProxyModel.Date)
+            self.populate_list(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.cmbFieldLabel)
+            self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbHeight)
             self.enable_symbology(self.dlg.cmbSymType)
             
              

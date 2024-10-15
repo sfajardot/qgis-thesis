@@ -8,7 +8,8 @@ from qgis.core import Qgis, QgsProject, QgsPrintLayout, QgsMessageLog, QgsLayout
      QgsClassificationEqualInterval, QgsClassificationJenks, QgsClassificationQuantile,\
      QgsRuleBasedRenderer, QgsLayoutSize, QgsLayoutItemPicture, QgsMarkerSymbol,\
      QgsLayoutItemLabel, QgsTextFormat, QgsVectorLayerSimpleLabeling, QgsPalLayerSettings,\
-     QgsTextBufferSettings, QgsLayerTree, QgsLayoutItemLegend, QgsLayoutItemScaleBar
+     QgsTextBufferSettings, QgsLayerTree, QgsLayoutItemLegend, QgsLayoutItemScaleBar,\
+     QgsGeometry, QgsCoordinateReferenceSystem, QgsCoordinateTransform
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.utils import iface
 from PyQt5.QtWidgets import  QMessageBox
@@ -650,7 +651,7 @@ def create_text(layout, text, font_size, font = 'Times', bold = False, frame = T
         QgsLayoutItemLabel: The created textbox item.
     """
     txtbox = QgsLayoutItemLabel(layout)
-    txtbox.setText(text)
+    txtbox.setText(str(text))
     txtbox_format = QgsTextFormat()
     txtbox_format.setFont(QFont(font))
     txtbox_format.setSize(font_size)
@@ -756,7 +757,37 @@ def map_single_point_with_labels(layout, feature, layer):
     layer.triggerRepaint()
     return map
 
-def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, txtGnss, lnLogo, lnPhoto_1, lnPhoto_2, tblCoord):
+def sort_dates(dates):
+    # Sorting QDate objects from most recent to oldest
+    sorted_dates = sorted(dates, key=lambda dt: dt.toJulianDay(), reverse=True)
+
+    # Convert sorted QDate objects to 'dd-MM-yy' string format
+    sorted_date_strings = [date.toString("dd-MM-yy") for date in sorted_dates]
+    return sorted_date_strings, sorted_dates
+
+
+
+def get_matching_features(selected_feature, field_name, layer):
+    selected_value = selected_feature[field_name]
+    matching_features = []
+    for feature in layer.getFeatures():
+        if feature[field_name] == selected_value:
+            matching_features.append(feature)
+    return matching_features
+
+def get_sorted_by_date_features(sorted_qdates, features, date_attribute):
+    sorted_features = []
+    for date in sorted_qdates:
+        for feature in features:
+            if feature[date_attribute] == date:
+                sorted_features.append(feature)
+    return sorted_features
+
+
+
+def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, txtGnss,
+                      lnLogo, lnPhoto_1, lnPhoto_2, lnInst, cmbFieldLabel, cmbFieldSurvey,
+                       spbNumSrvy, cmbHeight):
     """
     Function to create a monograph layout according to the Polimi Belvedere Glacier Monitoring Project format.
 
@@ -767,10 +798,10 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
         txtTrgClr (QTextEdit): The textbox with the target color description.
         txtTrgDscr (QTextEdit): The textbox with the target description.
         txtGnss (QTextEdit): The textbox with the GNSS mode.
-        lnLogo (QLineEdit): The line edit with the file path for the Polimi logo.
+        lnLogo (QLineEdit): The line edit with the file path for the Institution logo.
         lnPhoto_1 (QLineEdit): The line edit with the file path for the first photo.
         lnPhoto_2 (QLineEdit): The line edit with the file path for the second photo.
-        tblCoord (QTableWidget): The table widget containing coordinates.
+
 
     Returns:
         None
@@ -779,21 +810,78 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     if not layer:
        QMessageBox.critical(self.dlg, "No Layer loaded", "Missing Point Layer")
        return
+    
+    #Get the field names for surveys and labels
+    label_field = cmbFieldLabel.currentField()
+    survey_field = cmbFieldSurvey.currentField()
+    h_field = cmbHeight.currentField()
+
+
     #Get selected feature
     feature = cmbMonoFeat.feature()
     if not feature:
        QMessageBox.critical(self.dlg, "No Feature loaded", "Missing Point Feature")
        return
+
+    #Get number of surveys
+    num_srvy = spbNumSrvy.value()
+    
+    
     
     #Get the name of the label
-    feature_name = feature["label"]
+    feature_name = feature[label_field]
+
+    #Get feature list
+    unsorted_features = get_matching_features(feature, label_field, layer)
+
+    #Get data from each feature in list into a list of strings
+
+    #Add here other values to be taken from
+    srvy_list = []
+    for ft in unsorted_features:
+        srvy_list.append(ft[survey_field])
+
+
+    srvy_sorted_list, sorted_qdates = sort_dates(srvy_list)
+
+    features = get_sorted_by_date_features(sorted_qdates, unsorted_features, survey_field)
+    print(features)
+
+
+    h_ell =[]
+    est = []
+    nord = []
+    lon = []
+    lat = []
+
+
+
+    for ft in features:
+        geom = ft.geometry()
+        geom2 = QgsGeometry(geom)
+        sourceCrs = layer.crs()
+        destCrs = QgsCoordinateReferenceSystem("EPSG:4326")
+        tr = QgsCoordinateTransform()
+        tr.setSourceCrs(sourceCrs)
+        tr.setDestinationCrs(destCrs)
+        geom2.transform(tr)
+        h_ell.append(ft[h_field])
+
+        lon.append(geom2.asPoint().x())
+        lat.append(geom2.asPoint().y())
+        est.append(geom.asPoint().x())
+        nord.append(geom.asPoint().y())
+
+    
+    val_mat = [lat, lon, h_ell, est, nord]
+
 
     #Get descriptions
     target_color = txtTrgClr.toPlainText()
     target_description = txtTrgDscr.toPlainText()
     gnss_type = txtGnss.toPlainText()
-    srvy_date = feature["survey_date"].toString('dd-MM-yy')
-    layout_name = feature_name+'_'+srvy_date
+    
+    layout_name = str(feature_name)+'_'+srvy_sorted_list[0]
 
     #Determine type of Ground Control Point
     gcp_bool = feature["is_fixed"]
@@ -814,21 +902,21 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     title.setFixedSize(QgsLayoutSize(97.5, 20))
     title.attemptMove(QgsLayoutPoint(7.5, y_pos, QgsUnitTypes.LayoutMillimeters))
 
-    #Set Polimi headers
-    polimi_text = "Politecnico di Milano\nDipartimento di Ingegneria Civile e Ambientale\nSezione di Geodesia e Geomatica"
-    polimi = create_text(layout, polimi_text, font_size = 10, HAlign = False)
-    polimi.setFixedSize(QgsLayoutSize(75, 20))
-    polimi.attemptMove(QgsLayoutPoint(127.5, y_pos, QgsUnitTypes.LayoutMillimeters))
-    polimi_path = lnLogo.text()
-    polimi_logo = create_image(layout, polimi_path, 'PolimiLogo')
-    polimi_logo.attemptMove(QgsLayoutPoint(105, y_pos, QgsUnitTypes.LayoutMillimeters))
-    polimi_logo.setFixedSize(QgsLayoutSize(22.5,20))
-    polimi_logo.setFrameEnabled(True)
+    #Set Institution headers
+    inst_text = lnInst.text()
+    inst = create_text(layout, inst_text, font_size = 10, HAlign = False)
+    inst.setFixedSize(QgsLayoutSize(75, 20))
+    inst.attemptMove(QgsLayoutPoint(127.5, y_pos, QgsUnitTypes.LayoutMillimeters))
+    inst_path = lnLogo.text()
+    inst_logo = create_image(layout, inst_path, 'InstLogo')
+    inst_logo.attemptMove(QgsLayoutPoint(105, y_pos, QgsUnitTypes.LayoutMillimeters))
+    inst_logo.setFixedSize(QgsLayoutSize(22.5,20))
+    inst_logo.setFrameEnabled(True)
 
-    y_pos += polimi.boundingRect().height()
+    y_pos += inst.boundingRect().height()
 
     #Add Descriptions
-    dscr_text = f"Target: {target_color}\n\nDescrizione: {target_description}\nTipo di punto: {gcp_type}\n\nModalita di rilievo GNSS: {gnss_type}"
+    dscr_text = f"Target Color: {target_color}\n\nDescription: {target_description}\nGCP Type: {gcp_type}\n\nType of GNSS: {gnss_type}\nCRS: {sourceCrs}"
     dscr = create_text(layout, dscr_text, font_size = 12, VAlign = False, HAlign = False)
     dscr.setFixedSize(QgsLayoutSize(195, 50))
     dscr.setMarginX(0.5)
@@ -836,58 +924,23 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     dscr.attemptMove(QgsLayoutPoint(7.5, y_pos, QgsUnitTypes.LayoutMillimeters))
     y_pos += dscr.boundingRect().height()
     
-    ######################################################################################
-    ####Add Survey Title (Considering only one date given by the feature in shapefile)
-    #srvy_text = f"Coordinate {srvy_date}"
-    #srvy = create_text(layout, srvy_text, font_size = 12, bold = True)
-    #srvy.setFixedSize(QgsLayoutSize(195, 7.5))
-    #srvy.attemptMove(QgsLayoutPoint(7.5, y_pos, QgsUnitTypes.LayoutMillimeters))
-    #y_pos += srvy.boundingRect().height()
-
-    #Create "Table" format for coordinates
-    #headers = ['X [m]', 'Y [m]', 'Z [m]', 'Lat (j)', 'Long (I)', 'H_ell [m]', 'Est [m]', 'Nord [m]']
-    #x_marg = 7.5
-    #col = 0
-    #for head in headers:
-    #     lbl_txt = f"{head}"
-    #     label = create_text(layout, lbl_txt, font_size=12)
-    #     label.setFixedSize(QgsLayoutSize(24.1, 10))
-    #     label.attemptMove(QgsLayoutPoint(x_marg, y_pos, QgsUnitTypes.LayoutMillimeters))
-    #     x_marg += label.boundingRect().width()
-    #x_marg = 7.5
-    #for head in headers:
-    #     val_obj = tblCoord.item(0,col)
-    #     if col == 0:
-    #        y_pos += label.boundingRect().height()
-    #     if val_obj:
-    #          val_txt = val_obj.text()
-    #     else:
-    #          val_txt = ' '         
-    #     value = create_text(layout, val_txt, font_size = 12)
-    #     value.setFixedSize(QgsLayoutSize(24.1, 10))
-    #     value.attemptMove(QgsLayoutPoint(x_marg, y_pos, QgsUnitTypes.LayoutMillimeters))
-    #     x_marg += label.boundingRect().width()
-    #     col += 1
-    #y_pos += value.boundingRect().height()
-    #####################################################################################
-    
     #Get the number of rows and columns in the QTableWidget
-    rows = tblCoord.rowCount()
-    cols = tblCoord.columnCount()
+    if num_srvy>len(srvy_sorted_list):
+        rows = range(0, len(srvy_sorted_list))
+    else:
+        rows = range(0, num_srvy)
 
-    # There is a bug I cannot find a solution to. If a new row has written something and then
-    # deleted, or even just clicked Python interprets it as existing and creates and empty row
+    cols = ['Lat (j)', 'Long (I)', 'H_ell [m]', 'Est [m]', 'Nord [m]']
+
     # Here textboxes are created instead of a layout table in the layout because the layout table 
     # is not editable and is saved as a static image, thus making editing and proofreading hard
     
     #Iterate over rows in the QTable
-    for row in range(rows):
-         #If the first column of the row which indicates the date of the survey is not empty
-         # the function will create a "table" in the layout
-         if tblCoord.item(row,0) != None:
+    for row in rows:
+         srvy_date = srvy_sorted_list[row]
+         if srvy_date != None:
             # This first parts creates the title of the table as the survey date given
-            srvy_obj = tblCoord.item(row,0)
-            srvy_text = 'Coordinate: ' + srvy_obj.text()
+            srvy_text = 'Coordinates: ' + srvy_date
             srvy = create_text(layout, srvy_text, font_size = 12, bold = True)
             srvy.setFixedSize(QgsLayoutSize(195, 7.5))
             srvy.attemptMove(QgsLayoutPoint(7.5, y_pos, QgsUnitTypes.LayoutMillimeters))
@@ -895,11 +948,10 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
             # Establishes the X margin counter
             x_marg = 7.5
             #Iterates over the columns to create the textboxes from left to right of the headers
-            for col in range(1, cols):
-                head_obj = tblCoord.horizontalHeaderItem(col)
-                head_txt = head_obj.text()
+            for col in cols:
+                head_txt = col
                 head = create_text(layout, head_txt, font_size = 12)
-                head.setFixedSize(QgsLayoutSize(24.1, 10))
+                head.setFixedSize(QgsLayoutSize(195/len(cols)-(0.25), 10))
                 head.attemptMove(QgsLayoutPoint(x_marg, y_pos, QgsUnitTypes.LayoutMillimeters))
                 x_marg += head.boundingRect().width()
             #Resets the x_marg to initial value
@@ -908,14 +960,10 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
             y_pos += head.boundingRect().height()
             # Iterates to add the values to each header. This is done in a second for loop to not have to add and substract
             # the y_pos every time. It can be probably optimized.
-            for col in range(1, cols):
-                val_obj = tblCoord.item(row, col)
-                if val_obj:
-                    val_txt = val_obj.text()
-                else:
-                    val_txt = ' '
+            for col in range(0, len(cols)):
+                val_txt = str(val_mat[col][row])
                 value = create_text(layout, val_txt, font_size = 12)
-                value.setFixedSize(QgsLayoutSize(24.1, 10))
+                value.setFixedSize(QgsLayoutSize((195/len(cols))-(0.25), 10))
                 value.attemptMove(QgsLayoutPoint(x_marg, y_pos, QgsUnitTypes.LayoutMillimeters))
                 x_marg += value.boundingRect().width()
             y_pos += value.boundingRect().height()
