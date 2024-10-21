@@ -321,7 +321,7 @@ class RasterTester:
         QgsMessageLog.logMessage('Processing button pressed', 'vol test', Qgis.Info)
         elevation_change(self, self.dlg.lnOutput, self.dlg.cmbOld, self.dlg.cmbNew,
                          self.dlg.chkBB, self.dlg.cmbBB, self.dlg.chkStats, self.dlg.lnOutputStats,
-                         self.dlg.chkChangeType)
+                         self.dlg.chkChangeType, self.dlg.spbTimeChange)
         self.dlg.close()
 
     def layout_tab(self):

@@ -9,8 +9,7 @@ from qgis.core import Qgis, QgsProject, QgsPrintLayout, QgsMessageLog, QgsLayout
      QgsRuleBasedRenderer, QgsLayoutSize, QgsLayoutItemPicture, QgsMarkerSymbol,\
      QgsLayoutItemLabel, QgsTextFormat, QgsVectorLayerSimpleLabeling, QgsPalLayerSettings,\
      QgsTextBufferSettings, QgsLayerTree, QgsLayoutItemLegend, QgsLayoutItemScaleBar,\
-     QgsGeometry, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsVectorLayer,\
-     QgsRasterFileWriter, QgsRasterPipe
+     QgsGeometry, QgsCoordinateReferenceSystem, QgsCoordinateTransform
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry, QgsInterpolator,\
      QgsIDWInterpolator, QgsTinInterpolator, QgsGridFileWriter
 from qgis.utils import iface
@@ -546,7 +545,7 @@ def get_raster_layer(self, combo_box, layer_type):
     QgsMessageLog.logMessage(f"{layer_type} layer '{raster_name}' loaded", 'vol test', Qgis.Info)
     return raster_layer
 
-def elevation_change(self, lnOutput, cmbOld, cmbNew, chkBB, cmbBB, chkStats, lnOutputStats, chkChangeType):
+def elevation_change(self, lnOutput, cmbOld, cmbNew, chkBB, cmbBB, chkStats, lnOutputStats, chkChangeType, spbTimeChange):
     """
     Perform elevation change calculation between two raster layers.
 
@@ -612,15 +611,15 @@ def elevation_change(self, lnOutput, cmbOld, cmbNew, chkBB, cmbBB, chkStats, lnO
     old_raster_ref = create_raster_entry(old_raster, "oldRaster")
     new_raster_ref = create_raster_entry(new_raster, "newRaster")
 
-
+    timelapse = spbTimeChange.value()
     # Get area of reference pixel
     pixel_area = old_raster.rasterUnitsPerPixelX()*old_raster.rasterUnitsPerPixelY()
     # Perform raster calculation (New Raster - Old Raster)
     # Check if it should be calculated as volume
     if chkChangeType.isChecked():
-        formula_string = f"({new_raster_ref.ref} - {old_raster_ref.ref})*{pixel_area}"
+        formula_string = f"({new_raster_ref.ref} - {old_raster_ref.ref})*{pixel_area}/{timelapse}"
     else:
-        formula_string = f"{new_raster_ref.ref} - {old_raster_ref.ref}"
+        formula_string = f"({new_raster_ref.ref} - {old_raster_ref.ref})/{timelapse}"
     entries = [new_raster_ref, old_raster_ref]
 
     difference_raster = QgsRasterCalculator(

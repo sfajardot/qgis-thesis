@@ -23,7 +23,7 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>3</number>
+    <number>0</number>
    </property>
    <widget class="QWidget" name="tab">
     <attribute name="title">
@@ -245,14 +245,40 @@
     <widget class="QCheckBox" name="chkChangeType">
      <property name="geometry">
       <rect>
-       <x>190</x>
-       <y>30</y>
+       <x>230</x>
+       <y>40</y>
        <width>161</width>
        <height>17</height>
       </rect>
      </property>
      <property name="text">
       <string>Calculate as Volume Change</string>
+     </property>
+    </widget>
+    <widget class="QgsSpinBox" name="spbTimeChange">
+     <property name="geometry">
+      <rect>
+       <x>230</x>
+       <y>90</y>
+       <width>90</width>
+       <height>27</height>
+      </rect>
+     </property>
+     <property name="minimum">
+      <number>1</number>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_34">
+     <property name="geometry">
+      <rect>
+       <x>230</x>
+       <y>70</y>
+       <width>151</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Period of time between DEMs</string>
      </property>
     </widget>
    </widget>
