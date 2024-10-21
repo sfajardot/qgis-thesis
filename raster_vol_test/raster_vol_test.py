@@ -320,7 +320,8 @@ class RasterTester:
 
         QgsMessageLog.logMessage('Processing button pressed', 'vol test', Qgis.Info)
         elevation_change(self, self.dlg.lnOutput, self.dlg.cmbOld, self.dlg.cmbNew,
-                         self.dlg.chkBB, self.dlg.cmbBB, self.dlg.chkStats, self.dlg.lnOutputStats)
+                         self.dlg.chkBB, self.dlg.cmbBB, self.dlg.chkStats, self.dlg.lnOutputStats,
+                         self.dlg.chkChangeType)
         self.dlg.close()
 
     def layout_tab(self):
@@ -390,6 +391,20 @@ class RasterTester:
         cmbPopulated.setLayer(layer)
         cmbPopulated.setDisplayExpression(field_name)
 
+    def unique_field_values(self, cmbLayerPopulator, cmbFieldPopulator, cmbPopulated):
+        layer = cmbLayerPopulator.currentLayer()
+        field_name = cmbFieldPopulator.currentField()
+        unique_values = set()
+        if layer:
+            for feature in layer.getFeatures():
+                value = feature[field_name]
+                if value is not None:
+                    unique_values.add(str(value))
+        unique_values = sorted(unique_values)
+        cmbPopulated.addItems(unique_values)
+
+
+
     def close_dialog(self):
         """
         Close the dialog window.
@@ -423,11 +438,16 @@ class RasterTester:
         for tblWdgt in tblWdgts:
             tblWdgt.clearContents()
 
+    def connect_filter(self, cmbLayer, lnFilter, cmbField = False):
+        lnFilter.setLayer(cmbLayer.currentLayer())
+        if cmbField:
+            lnFilter.setField(cmbField.currentField())
+
     def interpolation_tab(self):
         QgsMessageLog.logMessage('Interpolation button pressed', 'vol test', Qgis.Info)
         interpolator(self, self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField,
                      self.dlg.cmbInterpolationType, self.dlg.lnOutputInter, self.dlg.spbResolution,
-                     self.dlg.spbWeight)
+                     self.dlg.spbWeight, self.dlg.lnInterFilter)
         self.dlg.close()
 
     def run(self):
@@ -492,12 +512,15 @@ class RasterTester:
             self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbHeight))
 
             #populate feature points for monography
-            self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.populate_list(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.cmbFieldLabel))
-            self.dlg.cmbFieldLabel.fieldChanged.connect(lambda: self.populate_list(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.cmbFieldLabel))
-            
+            self.dlg.cmbFieldLabel.fieldChanged.connect(lambda: self.unique_field_values(self.dlg.cmbMonoPoints, self.dlg.cmbFieldLabel, self.dlg.cmbMonoFeat))
+            self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.unique_field_values(self.dlg.cmbMonoPoints, self.dlg.cmbFieldLabel, self.dlg.cmbMonoFeat))
+
             #populate fields for interpolation combobox
             self.dlg.cmbInterpolationLayer.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField,
                                                                                         QgsFieldProxyModel.Numeric))
+
+            #Connect filter if layer or field is changed
+            self.dlg.cmbInterpolationLayer.layerChanged.connect(lambda: self.connect_filter(self.dlg.cmbInterpolationLayer, self.dlg.lnInterFilter))
 
             # Set filters for combo boxes
             self.dlg.cmbOld.setFilters(QgsMapLayerProxyModel.RasterLayer)
@@ -507,17 +530,20 @@ class RasterTester:
             self.dlg.cmbMonoPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
             self.dlg.cmbInterpolationLayer.setFilters(QgsMapLayerProxyModel.PointLayer)
 
+
             # Initialize field and feature values
             self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue, QgsFieldProxyModel.Numeric)
             self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbXMag, QgsFieldProxyModel.Numeric)
             self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbYMag, QgsFieldProxyModel.Numeric)
             self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbFieldLabel)
             self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbFieldSurvey, QgsFilter=QgsFieldProxyModel.Date)
-            self.populate_list(self.dlg.cmbMonoPoints, self.dlg.cmbMonoFeat, self.dlg.cmbFieldLabel)
+
+            self.unique_field_values(self.dlg.cmbMonoPoints, self.dlg.cmbFieldLabel, self.dlg.cmbMonoFeat)
             self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbHeight)
             self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField, QgsFieldProxyModel.Numeric)
             self.enable_symbology(self.dlg.cmbSymType)
             self.enable_weight(self.dlg.cmbInterpolationType)
+            self.connect_filter(self.dlg.cmbInterpolationLayer, self.dlg.lnInterFilter)
             
              
 

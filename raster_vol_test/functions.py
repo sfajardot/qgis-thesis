@@ -9,7 +9,8 @@ from qgis.core import Qgis, QgsProject, QgsPrintLayout, QgsMessageLog, QgsLayout
      QgsRuleBasedRenderer, QgsLayoutSize, QgsLayoutItemPicture, QgsMarkerSymbol,\
      QgsLayoutItemLabel, QgsTextFormat, QgsVectorLayerSimpleLabeling, QgsPalLayerSettings,\
      QgsTextBufferSettings, QgsLayerTree, QgsLayoutItemLegend, QgsLayoutItemScaleBar,\
-     QgsGeometry, QgsCoordinateReferenceSystem, QgsCoordinateTransform
+     QgsGeometry, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsVectorLayer,\
+     QgsRasterFileWriter, QgsRasterPipe
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry, QgsInterpolator,\
      QgsIDWInterpolator, QgsTinInterpolator, QgsGridFileWriter
 from qgis.utils import iface
@@ -457,16 +458,28 @@ def clip_raster(rLayer, bBox):
     :param bBox: The bounding box (mask) vector layer to clip the raster.
     :return: The clipped QgsRasterLayer object.
     """
+    bBox_crs = bBox.crs()
+    rLayer_crs = rLayer.crs()
+    if  bBox_crs != rLayer_crs:
+        QgsMessageLog.logMessage("Reprojecting bounding box", 'vol test', Qgis.Info)
+        parameters = {'INPUT': bBox,
+                     'TARGET_CRS': rLayer_crs.authid(),
+                     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT}
+        reproj = processing.run('native:reprojectlayer', parameters)['OUTPUT']
+    else:
+        reproj = bBox
+
+
     parameters = {'INPUT': rLayer,
-           'MASK': bBox,
+           'MASK': reproj,
            'NODATA': -9999,
            'ALPHA_BAND': False,
            'CROP_TO_CUTLINE': True,
            'KEEP_RESOLUTION': True,
            'OPTIONS': None,
            'DATA_TYPE': 0,
-           'SOURCE_CRS': 'ProjectCrs',
-           'TARGET_CRS': 'ProjectCrs',
+           'SOURCE_CRS': rLayer_crs.authid(),
+           'TARGET_CRS': rLayer_crs.authid(),
            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT}
     clip = processing.run('gdal:cliprasterbymasklayer', parameters)
     clipRaster = QgsRasterLayer(clip['OUTPUT'])
@@ -533,7 +546,7 @@ def get_raster_layer(self, combo_box, layer_type):
     QgsMessageLog.logMessage(f"{layer_type} layer '{raster_name}' loaded", 'vol test', Qgis.Info)
     return raster_layer
 
-def elevation_change(self, lnOutput, cmbOld, cmbNew, chkBB, cmbBB, chkStats, lnOutputStats):
+def elevation_change(self, lnOutput, cmbOld, cmbNew, chkBB, cmbBB, chkStats, lnOutputStats, chkChangeType):
     """
     Perform elevation change calculation between two raster layers.
 
@@ -599,8 +612,15 @@ def elevation_change(self, lnOutput, cmbOld, cmbNew, chkBB, cmbBB, chkStats, lnO
     old_raster_ref = create_raster_entry(old_raster, "oldRaster")
     new_raster_ref = create_raster_entry(new_raster, "newRaster")
 
+
+    # Get area of reference pixel
+    pixel_area = old_raster.rasterUnitsPerPixelX()*old_raster.rasterUnitsPerPixelY()
     # Perform raster calculation (New Raster - Old Raster)
-    formula_string = f"{new_raster_ref.ref} - {old_raster_ref.ref}"
+    # Check if it should be calculated as volume
+    if chkChangeType.isChecked():
+        formula_string = f"({new_raster_ref.ref} - {old_raster_ref.ref})*{pixel_area}"
+    else:
+        formula_string = f"{new_raster_ref.ref} - {old_raster_ref.ref}"
     entries = [new_raster_ref, old_raster_ref]
 
     difference_raster = QgsRasterCalculator(
@@ -816,32 +836,27 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     label_field = cmbFieldLabel.currentField()
     survey_field = cmbFieldSurvey.currentField()
     h_field = cmbHeight.currentField()
+    label_name = cmbMonoFeat.currentText()
 
+    #Filter layer to use only the features with the label name chosen
+    expression = f'\"{label_field}\" = \'{label_name}\''
+    layer.setSubsetString(expression)
 
-    #Get selected feature
-    feature = cmbMonoFeat.feature()
-    if not feature:
-       QMessageBox.critical(self.dlg, "No Feature loaded", "Missing Point Feature")
-       return
+    
 
     #Get number of surveys
     num_srvy = spbNumSrvy.value()
-    
-    
-    
-    #Get the name of the label
-    feature_name = feature[label_field]
 
-    #Get feature list
-    unsorted_features = get_matching_features(feature, label_field, layer)
-
-    #Get data from each feature in list into a list of strings
+    
 
     #Add here other values to be taken from
     srvy_list = []
-    for ft in unsorted_features:
+    unsorted_features =[]
+    for ft in layer.getFeatures():
         srvy_list.append(ft[survey_field])
-
+        unsorted_features.append(ft)
+    #Since we have saved the filtered features we can get rid of the query
+    layer.setSubsetString('')
 
     srvy_sorted_list, sorted_qdates = sort_dates(srvy_list)
 
@@ -867,14 +882,18 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
         tr.setDestinationCrs(destCrs)
         geom2.transform(tr)
         h_ell.append(ft[h_field])
-
-        lon.append(geom2.asPoint().x())
-        lat.append(geom2.asPoint().y())
+        lon_float = geom2.asPoint().x()
+        lat_float = geom2.asPoint().y()
+        lon.append(f"{lon_float:.9f}")
+        lat.append(f"{lat_float:.9f}")
         est.append(geom.asPoint().x())
         nord.append(geom.asPoint().y())
 
     
     val_mat = [lat, lon, h_ell, est, nord]
+
+    #Get the most recent feature from the list to use as base
+    feature = features[0]
 
 
     #Get descriptions
@@ -882,7 +901,7 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     target_description = txtTrgDscr.toPlainText()
     gnss_type = txtGnss.toPlainText()
     
-    layout_name = str(feature_name)+'_'+srvy_sorted_list[0]
+    layout_name = str(label_name)+'_'+srvy_sorted_list[0]
 
     #Determine type of Ground Control Point
     gcp_bool = feature["is_fixed"]
@@ -899,7 +918,7 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     y_pos = 7.5
 
     #Set title label
-    title = create_text(layout, text = feature_name, font_size = 36)
+    title = create_text(layout, text = label_name, font_size = 36)
     title.setFixedSize(QgsLayoutSize(97.5, 20))
     title.attemptMove(QgsLayoutPoint(7.5, y_pos, QgsUnitTypes.LayoutMillimeters))
 
@@ -917,7 +936,8 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     y_pos += inst.boundingRect().height()
 
     #Add Descriptions
-    dscr_text = f"Target Color: {target_color}\n\nDescription: {target_description}\nGCP Type: {gcp_type}\n\nType of GNSS: {gnss_type}\nCRS: {sourceCrs}"
+    crs_txt = sourceCrs.description()
+    dscr_text = f"Target Color: {target_color}\n\nDescription: {target_description}\nGCP Type: {gcp_type}\n\nType of GNSS: {gnss_type}\nCRS: {crs_txt}"
     dscr = create_text(layout, dscr_text, font_size = 12, VAlign = False, HAlign = False)
     dscr.setFixedSize(QgsLayoutSize(195, 50))
     dscr.setMarginX(0.5)
@@ -990,8 +1010,8 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     # Add scale bar
     scale = create_scale_bar(layout, map)
     scale.attemptResize(QgsLayoutSize(10,10))
-    scale_pos = y_pos + map.boundingRect().height()- scale.boundingRect().height()
-    scale.attemptMove(QgsLayoutPoint(7.5, scale_pos))
+    scale_pos = y_pos + map.boundingRect().height()- scale.boundingRect().height() -1
+    scale.attemptMove(QgsLayoutPoint(8.5, scale_pos))
     #Add North Arrow
     north = create_north_arrow(layout)
     north.attemptResize(QgsLayoutSize(10,10))
@@ -1020,7 +1040,10 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
 ##########################################################################################
 
 #######Interpolator functions###################
-def interpolator(self, cmbInterpolationLayer, cmbInterpolationField, cmbInterpolationType, lnOutputInter, spbResolution, spbWeight):
+
+
+def interpolator(self, cmbInterpolationLayer, cmbInterpolationField, cmbInterpolationType, lnOutputInter, 
+                 spbResolution, spbWeight, lnInterFilter):
     output_path = lnOutputInter.text()
     layer = cmbInterpolationLayer.currentLayer()
     if not layer:
@@ -1030,6 +1053,12 @@ def interpolator(self, cmbInterpolationLayer, cmbInterpolationField, cmbInterpol
     if not field:
        QMessageBox.critical(self.dlg, "No Field Found", "Missing Field")
        return
+    
+    if lnInterFilter.currentText() != '':
+        QgsMessageLog.logMessage("Filtering needed", 'vol test', Qgis.Info)
+        layer.setSubsetString(lnInterFilter.asExpression())
+    else:
+        QgsMessageLog.logMessage("No filtering needed", 'vol test', Qgis.Info)
     fields = layer.fields()
     idxField = fields.indexFromName(field)
     inter_type = cmbInterpolationType.currentText()
@@ -1043,21 +1072,24 @@ def interpolator(self, cmbInterpolationLayer, cmbInterpolationField, cmbInterpol
     layer_data.zCoordInterpolation=False
     layer_data.interpolationAttribute = idxField
     layer_data.sourceType = 0 
+    r_name = os.path.splitext(os.path.basename(output_path))[0]
     if inter_type == 'IDW':
         idw_interpolator = QgsIDWInterpolator([layer_data])
         idw_interpolator.setDistanceCoefficient(weight)
         output = QgsGridFileWriter(idw_interpolator, output_path, rect, ncol, nrow)
         output.writeFile()
-        r_name = 'IDW'+str(weight)+'_'+field
-        iface.addRasterLayer(output_path, r_name)
         #TIN Interpolation is not giving expected values
     if inter_type == 'TIN':
         tin_interpolation_method = QgsTinInterpolator.Linear
         tin_interpolator = QgsTinInterpolator([layer_data], tin_interpolation_method)
         output = QgsGridFileWriter(tin_interpolator, output_path, rect, ncol, nrow)
         output.writeFile()
-        r_name = 'TIN'+'_'+field
-        iface.addRasterLayer(output_path, r_name)
+
+    iface.addRasterLayer(output_path, r_name)
+
+
+    if lnInterFilter.currentText() != '':
+        layer.setSubsetString('')
 
 
 
