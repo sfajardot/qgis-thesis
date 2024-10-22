@@ -9,7 +9,8 @@ from qgis.core import Qgis, QgsProject, QgsPrintLayout, QgsMessageLog, QgsLayout
      QgsRuleBasedRenderer, QgsLayoutSize, QgsLayoutItemPicture, QgsMarkerSymbol,\
      QgsLayoutItemLabel, QgsTextFormat, QgsVectorLayerSimpleLabeling, QgsPalLayerSettings,\
      QgsTextBufferSettings, QgsLayerTree, QgsLayoutItemLegend, QgsLayoutItemScaleBar,\
-     QgsGeometry, QgsCoordinateReferenceSystem, QgsCoordinateTransform
+     QgsGeometry, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsVectorLayer,\
+     QgsRasterFileWriter, QgsRasterPipe
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry, QgsInterpolator,\
      QgsIDWInterpolator, QgsTinInterpolator, QgsGridFileWriter
 from qgis.utils import iface
@@ -20,7 +21,7 @@ from qgis import processing
 
 
 
-############ functions for Layout Tab #####################################################
+############ functions for Point Symbology #####################################################
 def create_layout(self, layout_name):
     """
     Create a new print layout and remove any previous layout with the same name.
@@ -61,132 +62,6 @@ def create_layout(self, layout_name):
     layout.initializeDefaults()
     layout.setName(layout_name)
     return layout, loManager
-
-def determine_orientation(self, extent, layout):
-    """
-    Determine and set the layout orientation (portrait or landscape) based on the map extent dimensions.
-
-    Args:
-    - extent (QgsRectangle): The geographic extent of the map.
-    - layout (QgsPrintLayout): The layout object where the orientation is applied.
-
-    Returns:
-    - bool: True if the layout is landscape, False if portrait.
-    - float: The height of the layout.
-    - float: The width of the layout.
-    - float: The height of the map extent.
-    - float: The width of the map extent.
-    - float: The scale ratio between the layout and the map extent.
-    """
-    QgsMessageLog.logMessage("Creating a layout", 'vol test', Qgis.Info)
-    map_width = extent.xMaximum() - extent.xMinimum()
-    map_height = extent.yMaximum() - extent.yMinimum()
-    page_size_name = QgsApplication.pageSizeRegistry().find(layout.pageCollection().page(0).pageSize())  # eg. 'A4' str
-    
-    #Define a checker to store if it is a landscape orientation
-    landscape = False
-    if map_width <= map_height:
-            #It is a portrait
-            
-            QgsMessageLog.logMessage("Portrait layout", 'vol test', Qgis.Info)
-            layout.pageCollection().page(0).setPageSize(page_size_name, QgsLayoutItemPage.Orientation.Portrait)
-    else:
-            #it is a landscape
-            landscape = True
-            QgsMessageLog.logMessage("Landscape layout", 'vol test', Qgis.Info)
-            layout.pageCollection().page(0).setPageSize(page_size_name, QgsLayoutItemPage.Orientation.Landscape)
-    
-    #Define the scale ratio between layout size and map size
-    layout_width = layout.pageCollection().page(0).pageSize().width()
-    layout_height = layout.pageCollection().page(0).pageSize().height()
-
-    if landscape:
-            scale_ratio = (layout_width / map_width)
-            if map_height * scale_ratio > layout_height:
-                scale_ratio = map_height / layout_height
-    else:
-            scale_ratio =(layout_height / map_height)
-            if map_width *scale_ratio > layout_width:
-                scale_ratio = map_height / layout_height
-    return landscape, layout_height, layout_width, map_height, map_width, scale_ratio
-
-def determine_scale(self, landscape, layout, layout_height, layout_width, map_height, map_width, scale_ratio):
-    """
-    Calculate and set the map scale for the layout.
-
-    Args:
-    - landscape (bool): Indicates if the layout is in landscape orientation.
-    - layout (QgsPrintLayout): The layout object.
-    - layout_height (float): The height of the layout page.
-    - layout_width (float): The width of the layout page.
-    - map_height (float): The height of the map extent.
-    - map_width (float): The width of the map extent.
-    - scale_ratio (float): The ratio between the layout size and map size.
-
-    Returns:
-    - float: Adjusted height of the map.
-    - float: Adjusted width of the map.
-    - QgsLayoutItemMap: The layout item map object added to the layout.
-    """
-    QgsMessageLog.logMessage("Defining Scale", 'vol test', Qgis.Info)
-    my_map = QgsLayoutItemMap(layout)
-    QgsMessageLog.logMessage(f"map width: {map_width}/n map height: {map_height}", 'vol test', Qgis.Info)
-    QgsMessageLog.logMessage(f"scale ratio: {scale_ratio}", 'vol test', Qgis.Info)
-    previous_height = map_height
-    previous_width = map_width
-    if landscape:
-        map_width = layout_width
-        map_height = round(map_height * scale_ratio, 3)  # makes qgis bug if not rounded 3
-        # workaround don't know why in special case it has to be changed !:#
-        if map_height > layout_height:
-            map_height = layout_height
-            map_width = round(previous_width / scale_ratio, 3)
-    else:
-        map_width = round(map_width * scale_ratio, 3)
-        map_height = layout_height
-        if map_width > map_height:
-            map_width = layout_width
-            map_height = round(previous_height / scale_ratio, 3)
-
-    return map_height, map_width, my_map
-
-def add_map(self, e, layout, layout_height, layout_width, map_height, map_width, margin, my_map):
-    """
-    Add the map to the layout with appropriate margins and centering.
-
-    Args:
-    - e (QgsRectangle): The extent of the map canvas.
-    - layout (QgsPrintLayout): The layout object where the map is added.
-    - layout_height (float): The height of the layout page.
-    - layout_width (float): The width of the layout page.
-    - map_height (float): The height of the map area.
-    - map_width (float): The width of the map area.
-    - margin (float): The margin to apply around the map.
-    - my_map (QgsLayoutItemMap): The map item to be added to the layout.
-
-    Returns:
-    - float: The real height of the map after margins.
-    - float: The real width of the map after margins.
-    - float: The x-offset for centering the map.
-    - float: The y-offset for centering the map.
-    - QgsLayoutItemMap: The map item added to the layout.
-    """
-    QgsMessageLog.logMessage("Adding map to layout", 'vol test', Qgis.Info)
-    map_width = map_width - margin
-    map_height = map_height - margin
-    my_map.setRect(0, 0, map_width, map_height)
-    my_map.setExtent(e)
-    layout.addLayoutItem(my_map)
-    my_map.refresh()
-    map_real_width = my_map.rect().size().width()
-    map_real_height = my_map.rect().size().height()
-    x_offset = (layout_width - map_real_width) / 2
-    y_offset = (layout_height - map_real_height) / 2
-    my_map.setBackgroundColor(QColor(255, 255, 255, 255))
-    my_map.setFrameEnabled(True)
-    my_map.attemptMove(QgsLayoutPoint(x_offset, y_offset, QgsUnitTypes.LayoutMillimeters))
-    layout.addLayoutItem(my_map)
-    return map_real_height, map_real_width, x_offset, y_offset, my_map
 
 def create_legend(layout, layer, map):
     """
@@ -258,52 +133,6 @@ def create_scale_bar(layout, map):
     layout.addLayoutItem(scale)
     return scale
 
-
-
-def run_layout(self, extent, layoutName):
-    """
-    Run the full layout creation process, including orientation, scaling, and adding the map.
-
-    Args:
-    - extent (QgsRectangle): The extent of the old year raster.
-    - layoutName (str): The name of the layout to create or replace.
-
-    Returns:
-    - my_map (QgsLayoutItemMap): The map item added to the layout..
-    """
-    #The extent of the layput is the old Year Raster
-    map_width = extent.xMaximum() - extent.xMinimum()
-    map_height = extent.yMaximum() - extent.yMinimum()
-    if (map_height==0) or (map_width==0):
-        QgsMessageLog.logMessage("No loaded data - aborting", 'vol test', Qgis.Info)
-        return
-
-
-    try:
-        layout, manager = create_layout(self, layoutName)
-    except:
-        # Quick and dirty. In case people decide not to replace previous layout
-        QgsMessageLog.logMessage("Cancelled", 'vol test', Qgis.Info)
-        return
-    
-    # Determine and set best layout orientation
-    landscape, layout_height, layout_width,\
-            map_height, map_width, \
-            scale_ratio = determine_orientation(self, \
-                                                extent, layout)
-
-    # Calculate scale
-    map_height, map_width, my_map = determine_scale(self, landscape, \
-                                                    layout, layout_height, layout_width,\
-                                                        map_height, map_width, scale_ratio)
-
-    # Add map
-    _,_,_,_,my_map = add_map(self, extent, layout, layout_height, \
-            layout_width, map_height, map_width, 10, my_map)
-
-    manager.addLayout(layout)
-    self.iface.openLayoutDesigner(layout)
-    return my_map, layout
 
 def graduated_symbology(self, layer, attribute_name, classification_method, num_classes):
     """
@@ -396,7 +225,7 @@ def vector_field_symbology(self, layer, xMag, yMag, scaleFactor):
 
 
 
-def symbolized_map(self, cmbLayoutPoints, cmbFieldValue, cmbGradMeth, spbNumClass, cmbSymType, lnLayoutName, cmbXMag, cmbYMag, spbScale ):
+def symbolized_map(self, cmbLayoutPoints, cmbFieldValue, cmbGradMeth, spbNumClass, cmbSymType, cmbXMag, cmbYMag, spbScale):
     """
     Apply symbology and create a map layout with specified parameters.
 
@@ -405,7 +234,6 @@ def symbolized_map(self, cmbLayoutPoints, cmbFieldValue, cmbGradMeth, spbNumClas
     :param cmbGradMeth: ComboBox to select classification method ('Equal Interval', 'Jenks', etc.).
     :param spbNumClass: SpinBox for the number of classification classes.
     :param cmbSymType: ComboBox to select the type of symbology ('Graduated').
-    :param lnLayoutName: LineEdit for specifying the layout name.
     :return: None.
     """
     layer = cmbLayoutPoints.currentLayer()
@@ -422,33 +250,57 @@ def symbolized_map(self, cmbLayoutPoints, cmbFieldValue, cmbGradMeth, spbNumClas
     elif sym_type == 'Vector Field Marker':
         vector_field_symbology(self, layer, xMag, yMag, scaleFactor)
 
-    
-    layoutName = lnLayoutName.text()
-    if not layoutName:
-        layoutName = "Report Layout"
-    QgsMessageLog.logMessage(f"Layout {layoutName} being created", 'vol test', Qgis.Info)
-    points = cmbLayoutPoints.currentLayer()
-    #Adds a 10% buffer to the extent of the map so corner points are more visible
-    extent = points.extent().buffered(points.extent().width()*0.1)
-    my_map, layout= run_layout(self, extent, layoutName)
-    map_pos = my_map.pagePos()
-    QgsMessageLog.logMessage("Layout Created", 'vol test', Qgis.Info)
-    map_width = my_map.boundingRect().width()
-    map_height = my_map.boundingRect().height()
-    #Adds legend to map
-    ## CURRENTLY UNAVAILABLE DUE TO QGIS CRASH< NO DOCUMENTATION ON HOW TO FIX QGIS bug
-    #legend = create_legend(layout, layer, my_map)
-    north = create_north_arrow(layout)
-    north.attemptResize(QgsLayoutSize(10,10))
-    north.attemptMove(QgsLayoutPoint(map_pos), QgsUnitTypes.LayoutMillimeters)
-
-    scale = create_scale_bar(layout, my_map)
-    scale.attemptResize(QgsLayoutSize(map_width, 13.2))
-    scale_pos = map_pos + QPointF(0, map_height - scale.boundingRect().height())
-    scale.attemptMove(QgsLayoutPoint(scale_pos), QgsUnitTypes.LayoutMillimeters)
 ########################################################################################
+#######Interpolator functions###################
 
-######################### Functions for Processing Tab #################################
+def interpolator(self, cmbInterpolationLayer, cmbInterpolationField, cmbInterpolationType, lnOutputInter, 
+                 spbResolution, spbWeight, lnInterFilter):
+    output_path = lnOutputInter.text()
+    layer = cmbInterpolationLayer.currentLayer()
+    if not layer:
+       QMessageBox.critical(self.dlg, "No Layer loaded", "Missing Point Layer")
+       return
+    field = cmbInterpolationField.currentField()
+    if not field:
+       QMessageBox.critical(self.dlg, "No Field Found", "Missing Field")
+       return
+    
+    if lnInterFilter.currentText() != '':
+        QgsMessageLog.logMessage("Filtering needed", 'vol test', Qgis.Info)
+        layer.setSubsetString(lnInterFilter.asExpression())
+    else:
+        QgsMessageLog.logMessage("No filtering needed", 'vol test', Qgis.Info)
+    fields = layer.fields()
+    idxField = fields.indexFromName(field)
+    inter_type = cmbInterpolationType.currentText()
+    res = spbResolution.value()
+    weight = spbWeight.value()
+    rect = layer.extent()
+    ncol = int((rect.xMaximum() - rect.xMinimum())/res)
+    nrow = int((rect.yMaximum() - rect.yMinimum())/res)
+    layer_data = QgsInterpolator.LayerData()
+    layer_data.source = layer
+    layer_data.zCoordInterpolation=False
+    layer_data.interpolationAttribute = idxField
+    layer_data.sourceType = 0 
+    r_name = os.path.splitext(os.path.basename(output_path))[0]
+    if inter_type == 'IDW':
+        idw_interpolator = QgsIDWInterpolator([layer_data])
+        idw_interpolator.setDistanceCoefficient(weight)
+        output = QgsGridFileWriter(idw_interpolator, output_path, rect, ncol, nrow)
+        output.writeFile()
+        #TIN Interpolation is not giving expected values
+    if inter_type == 'TIN':
+        tin_interpolation_method = QgsTinInterpolator.Linear
+        tin_interpolator = QgsTinInterpolator([layer_data], tin_interpolation_method)
+        output = QgsGridFileWriter(tin_interpolator, output_path, rect, ncol, nrow)
+        output.writeFile()
+
+    iface.addRasterLayer(output_path, r_name)
+
+
+
+######################### Functions for Elevation Change Tab #################################
 def clip_raster(rLayer, bBox):
     """
     Clip a raster layer by a bounding box (mask layer).
@@ -1038,57 +890,6 @@ def create_monograph(self, cmbMonoPoints, cmbMonoFeat, txtTrgClr, txtTrgDscr, tx
     self.iface.openLayoutDesigner(layout)
 ##########################################################################################
 
-#######Interpolator functions###################
-
-
-def interpolator(self, cmbInterpolationLayer, cmbInterpolationField, cmbInterpolationType, lnOutputInter, 
-                 spbResolution, spbWeight, lnInterFilter):
-    output_path = lnOutputInter.text()
-    layer = cmbInterpolationLayer.currentLayer()
-    if not layer:
-       QMessageBox.critical(self.dlg, "No Layer loaded", "Missing Point Layer")
-       return
-    field = cmbInterpolationField.currentField()
-    if not field:
-       QMessageBox.critical(self.dlg, "No Field Found", "Missing Field")
-       return
-    
-    if lnInterFilter.currentText() != '':
-        QgsMessageLog.logMessage("Filtering needed", 'vol test', Qgis.Info)
-        layer.setSubsetString(lnInterFilter.asExpression())
-    else:
-        QgsMessageLog.logMessage("No filtering needed", 'vol test', Qgis.Info)
-    fields = layer.fields()
-    idxField = fields.indexFromName(field)
-    inter_type = cmbInterpolationType.currentText()
-    res = spbResolution.value()
-    weight = spbWeight.value()
-    rect = layer.extent()
-    ncol = int((rect.xMaximum() - rect.xMinimum())/res)
-    nrow = int((rect.yMaximum() - rect.yMinimum())/res)
-    layer_data = QgsInterpolator.LayerData()
-    layer_data.source = layer
-    layer_data.zCoordInterpolation=False
-    layer_data.interpolationAttribute = idxField
-    layer_data.sourceType = 0 
-    r_name = os.path.splitext(os.path.basename(output_path))[0]
-    if inter_type == 'IDW':
-        idw_interpolator = QgsIDWInterpolator([layer_data])
-        idw_interpolator.setDistanceCoefficient(weight)
-        output = QgsGridFileWriter(idw_interpolator, output_path, rect, ncol, nrow)
-        output.writeFile()
-        #TIN Interpolation is not giving expected values
-    if inter_type == 'TIN':
-        tin_interpolation_method = QgsTinInterpolator.Linear
-        tin_interpolator = QgsTinInterpolator([layer_data], tin_interpolation_method)
-        output = QgsGridFileWriter(tin_interpolator, output_path, rect, ncol, nrow)
-        output.writeFile()
-
-    iface.addRasterLayer(output_path, r_name)
-
-
-    if lnInterFilter.currentText() != '':
-        layer.setSubsetString('')
 
 
 

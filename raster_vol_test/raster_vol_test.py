@@ -217,14 +217,15 @@ class RasterTester:
         Returns:
         - None, but enables or disables the button visually.
         """
-        if chkbox.isChecked():
-            enblBtn.setEnabled(True)
-            enblBtn.repaint()
-        else:
-            enblBtn.setDisabled(True)
-            enblBtn.repaint()
+        for btn in enblBtn:
+            if chkbox.isChecked():
+                btn.setEnabled(True)
+                btn.repaint()
+            else:
+                btn.setDisabled(True)
+                btn.repaint()
 
-    def enable_symbology(self, symType):
+    def enable_symbology(self, symType, enable_grad, enable_vfm):
         """
         Enable or disable buttons based on the state of the symbology chosen.
 
@@ -239,28 +240,26 @@ class RasterTester:
         Returns:
         - None, but enables or disables the button visually.
         """
-        if symType.currentText() == 'Graduated':
-            self.dlg.cmbFieldValue.setEnabled(True)
-            self.dlg.cmbGradMeth.setEnabled(True)
-            self.dlg.spbNumClass.setEnabled(True)
-            self.dlg.cmbXMag.setEnabled(False)
-            self.dlg.cmbYMag.setEnabled(False)
-            self.dlg.spbScale.setEnabled(False)
-        elif symType.currentText() == 'Vector Field Marker':
-            self.dlg.cmbFieldValue.setEnabled(False)
-            self.dlg.cmbGradMeth.setEnabled(False)
-            self.dlg.spbNumClass.setEnabled(False)
-            self.dlg.cmbXMag.setEnabled(True)
-            self.dlg.cmbYMag.setEnabled(True)
-            self.dlg.spbScale.setEnabled(True)
+        for wdgt in enable_grad:
+            if symType.currentText() == 'Graduated':
+                wdgt.setEnabled(True)
+            elif symType.currentText() == 'Vector Field Marker':
+                wdgt.setEnabled(False)
+        for wdgt in enable_vfm:
+            if symType.currentText() == 'Graduated':
+                wdgt.setEnabled(False)
+            elif symType.currentText() == 'Vector Field Marker':
+                wdgt.setEnabled(True)
+
+    def enable_exceptions(self, chkBox,  symType, enable_grad, enable_vfm):
+        if chkBox.isChecked():
+            self.enable_symbology(symType, enable_grad, enable_vfm)
 
     def enable_weight(self, cmbInterpolationType):
         if cmbInterpolationType.currentText() == 'IDW':
             self.dlg.spbWeight.setEnabled(True)
         else:
             self.dlg.spbWeight.setEnabled(False)
-
-
 
 
 
@@ -324,32 +323,16 @@ class RasterTester:
                          self.dlg.chkChangeType, self.dlg.spbTimeChange)
         self.dlg.close()
 
-    def layout_tab(self):
-        """
-        Process the graduated map layout when the corresponding button is pressed.
-
-        This function logs a message when the 'Layout' button is pressed. It then calls the `symbolized_map` function,
-        which creates a graduated map layout with the selected symbology and field values, and closes the dialog.
-
-        Args:
-        - None, but relies on UI inputs for the points layer, field values, and layout options.
-
-        Returns:
-        - None, but performs map layout processing and closes the dialog.
-        """
-
-        QgsMessageLog.logMessage('Layout button pressed', 'vol test', Qgis.Info)
-        symbolized_map(self, self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue, self.dlg.cmbGradMeth,
-                      self.dlg.spbNumClass, self.dlg.cmbSymType, self.dlg.lnLayoutName, self.dlg.cmbXMag,
-                      self.dlg.cmbYMag, self.dlg.spbScale)
-        self.dlg.close()
 
     def monography_tab(self):
         """
-        Process the monograph creation task when the corresponding button is pressed.
+        Process the monograph creation task when the corresponding button is pressed and if checked, processes the graduated map layout when the corresponding button is pressed.
 
         This function logs a message when the 'Monography' button is pressed. It calls the `create_monograph` function,
         which generates a monograph layout with the selected feature, descriptions, and images, and then closes the dialog.
+        If the checkbox for point symbology is checked it also logs a message when the 'Layout' button is pressed. It then 
+        calls the `symbolized_map` function, which creates a graduated map layout with the selected symbology 
+        and field values, and closes the dialog.
 
         Args:
         - None, but relies on UI inputs for the point layer, feature, target color, description, GNSS info, and image paths.
@@ -362,8 +345,19 @@ class RasterTester:
                          self.dlg.txtTrgDscr, self.dlg.txtGnss, self.dlg.lnLogo, self.dlg.lnPhoto_1,
                          self.dlg.lnPhoto_2, self.dlg.lnInst, self.dlg.cmbFieldLabel, self.dlg.cmbFieldSurvey,
                          self.dlg.spbNumSrvy, self.dlg.cmbHeight)
+
         self.dlg.close()
 
+    def interpolation_tab(self):
+        QgsMessageLog.logMessage('Interpolation button pressed', 'vol test', Qgis.Info)
+        interpolator(self, self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField,
+                    self.dlg.cmbInterpolationType, self.dlg.lnOutputInter, self.dlg.spbResolution,
+                    self.dlg.spbWeight, self.dlg.lnInterFilter)
+        if self.dlg.chkSymbology.isChecked():
+            symbolized_map(self, self.dlg.cmbInterpolationLayer, self.dlg.cmbFieldValue, self.dlg.cmbGradMeth, 
+                           self.dlg.spbNumClass, self.dlg.cmbSymType, self.dlg.cmbXMag, self.dlg.cmbYMag, self.dlg.spbScale)
+        self.dlg.close()
+                
     def populate_fields(self, cmbPopulator, cmbPopulated, QgsFilter = None):
         """
         Populate a combo box with data from a selected layer, optionally applying a filter.
@@ -443,12 +437,7 @@ class RasterTester:
         if cmbField:
             lnFilter.setField(cmbField.currentField())
 
-    def interpolation_tab(self):
-        QgsMessageLog.logMessage('Interpolation button pressed', 'vol test', Qgis.Info)
-        interpolator(self, self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField,
-                     self.dlg.cmbInterpolationType, self.dlg.lnOutputInter, self.dlg.spbResolution,
-                     self.dlg.spbWeight, self.dlg.lnInterFilter)
-        self.dlg.close()
+
 
     def run(self):
         """Run method to initialize the plugin."""
@@ -476,11 +465,6 @@ class RasterTester:
             self.dlg.btnProcess.accepted.connect(lambda: self.clear_data([self.dlg.lnOutput, self.dlg.lnOutputStats], []))
             self.dlg.btnProcess.rejected.connect(lambda: self.clear_data([self.dlg.lnOutput, self.dlg.lnOutputStats], []))
 
-            #Layout actions
-            self.dlg.btnLayout.accepted.connect(self.layout_tab)
-            self.dlg.btnLayout.rejected.connect(self.close_dialog)
-            self.dlg.btnLayout.accepted.connect(lambda: self.clear_data([self.dlg.lnLayoutName]))
-            self.dlg.btnLayout.rejected.connect(lambda: self.clear_data([self.dlg.lnLayoutName]))
             # Monography actions
             self.dlg.btnMono.accepted.connect(self.monography_tab)
             self.dlg.btnMono.rejected.connect(self.close_dialog)
@@ -499,11 +483,11 @@ class RasterTester:
             self.dlg.btnInterpolation.rejected.connect(self.close_dialog)
 
             # Populate fields for Layout Tabs
-            self.dlg.cmbLayoutPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue,
+            self.dlg.cmbInterpolationLayer.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbFieldValue,
                                                                                         QgsFieldProxyModel.Numeric))
-            self.dlg.cmbLayoutPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbXMag,
+            self.dlg.cmbInterpolationLayer.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbXMag,
                                                                                         QgsFieldProxyModel.Numeric))
-            self.dlg.cmbLayoutPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbYMag,
+            self.dlg.cmbInterpolationLayer.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbYMag,
                                                                                         QgsFieldProxyModel.Numeric))
             #Populate fields for survey and label name
             self.dlg.cmbMonoPoints.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbFieldLabel))
@@ -526,22 +510,22 @@ class RasterTester:
             self.dlg.cmbOld.setFilters(QgsMapLayerProxyModel.RasterLayer)
             self.dlg.cmbNew.setFilters(QgsMapLayerProxyModel.RasterLayer)
             self.dlg.cmbBB.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-            self.dlg.cmbLayoutPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
             self.dlg.cmbMonoPoints.setFilters(QgsMapLayerProxyModel.PointLayer)
             self.dlg.cmbInterpolationLayer.setFilters(QgsMapLayerProxyModel.PointLayer)
 
 
             # Initialize field and feature values
-            self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbFieldValue, QgsFieldProxyModel.Numeric)
-            self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbXMag, QgsFieldProxyModel.Numeric)
-            self.populate_fields(self.dlg.cmbLayoutPoints, self.dlg.cmbYMag, QgsFieldProxyModel.Numeric)
+            self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbFieldValue, QgsFieldProxyModel.Numeric)
+            self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbXMag, QgsFieldProxyModel.Numeric)
+            self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbYMag, QgsFieldProxyModel.Numeric)
             self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbFieldLabel)
             self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbFieldSurvey, QgsFilter=QgsFieldProxyModel.Date)
 
             self.unique_field_values(self.dlg.cmbMonoPoints, self.dlg.cmbFieldLabel, self.dlg.cmbMonoFeat)
             self.populate_fields(self.dlg.cmbMonoPoints, self.dlg.cmbHeight)
             self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField, QgsFieldProxyModel.Numeric)
-            self.enable_symbology(self.dlg.cmbSymType)
+            self.enable_symbology(self.dlg.cmbSymType, [self.dlg.cmbFieldValue, self.dlg.cmbGradMeth, self.dlg.spbNumClass],
+                                   [self.dlg.cmbXMag, self.dlg.cmbYMag, self.dlg.spbScale])
             self.enable_weight(self.dlg.cmbInterpolationType)
             self.connect_filter(self.dlg.cmbInterpolationLayer, self.dlg.lnInterFilter)
             
@@ -549,10 +533,17 @@ class RasterTester:
 
         # show the dialog
         #Do the dynamic connections for buttons that enbale/disable functions
-        self.dlg.chkBB.clicked.connect(lambda: self.enable_button(self.dlg.chkBB, self.dlg.cmbBB ))
-        self.dlg.chkStats.clicked.connect(lambda: self.enable_button(self.dlg.chkStats, self.dlg.lnOutputStats))
-        self.dlg.chkStats.clicked.connect(lambda: self.enable_button(self.dlg.chkStats, self.dlg.btnOutputStats))
-        self.dlg.cmbSymType.currentTextChanged.connect(lambda: self.enable_symbology(self.dlg.cmbSymType))
+        self.dlg.chkBB.clicked.connect(lambda: self.enable_button(self.dlg.chkBB, [self.dlg.cmbBB] ))
+        self.dlg.chkStats.clicked.connect(lambda: self.enable_button(self.dlg.chkStats, [self.dlg.lnOutputStats, self.dlg.btnOutputStats]))
+        self.dlg.cmbSymType.currentTextChanged.connect(lambda: self.enable_symbology(self.dlg.cmbSymType, 
+                                                                                     [self.dlg.cmbFieldValue, self.dlg.cmbGradMeth, self.dlg.spbNumClass],
+                                                                                       [self.dlg.cmbXMag, self.dlg.cmbYMag, self.dlg.spbScale]))
+        self.dlg.chkSymbology.clicked.connect(lambda: self.enable_button(self.dlg.chkSymbology, [self.dlg.cmbFieldValue, self.dlg.cmbGradMeth, self.dlg.spbNumClass,
+                                                                                             self.dlg.cmbXMag, self.dlg.cmbYMag, self.dlg.spbScale,
+                                                                                             self.dlg.cmbSymType]))
+        self.dlg.chkSymbology.clicked.connect(lambda: self.enable_exceptions(self.dlg.chkSymbology,  self.dlg.cmbSymType,
+                                                                             [self.dlg.cmbFieldValue, self.dlg.cmbGradMeth, self.dlg.spbNumClass],
+                                                                               [self.dlg.cmbXMag, self.dlg.cmbYMag, self.dlg.spbScale]))
         self.dlg.cmbInterpolationType.currentTextChanged.connect(lambda: self.enable_weight(self.dlg.cmbInterpolationType))
         
         #Show the dialogue
@@ -562,8 +553,6 @@ class RasterTester:
         if result:
             if self.dlg.btnProcess.accepted == True:
                 self.processing_tab
-            if self.dlg.btnLayout.accepted == True:
-                self.layout_tab
             if self.dlg.btnMono.accepted == True:
                 self.monography_tab
             if self.dlg.btnInterpolation.accepted == True:
