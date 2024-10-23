@@ -225,7 +225,7 @@ def vector_field_symbology(self, layer, xMag, yMag, scaleFactor):
 
 
 
-def symbolized_map(self, cmbLayoutPoints, cmbFieldValue, cmbGradMeth, spbNumClass, cmbSymType, cmbXMag, cmbYMag, spbScale):
+def symbolized_map(self, cmbLayoutPoints, cmbFieldValue, cmbGradMeth, spbNumClass, cmbSymType, cmbXMag, cmbYMag, spbScale, lnFilter):
     """
     Apply symbology and create a map layout with specified parameters.
 
@@ -236,7 +236,14 @@ def symbolized_map(self, cmbLayoutPoints, cmbFieldValue, cmbGradMeth, spbNumClas
     :param cmbSymType: ComboBox to select the type of symbology ('Graduated').
     :return: None.
     """
+    filter_expression = lnFilter.currentText()
     layer = cmbLayoutPoints.currentLayer()
+    if lnFilter.currentText() != '':
+        QgsMessageLog.logMessage("Filtering needed", 'vol test', Qgis.Info)
+        filter_by_expression(filter_expression, layer)
+    else:
+        QgsMessageLog.logMessage("No filtering needed", 'vol test', Qgis.Info)
+
     attribute_name = cmbFieldValue.currentField()
     classification_method = cmbGradMeth.currentText()
     num_class = spbNumClass.value()
@@ -253,6 +260,11 @@ def symbolized_map(self, cmbLayoutPoints, cmbFieldValue, cmbGradMeth, spbNumClas
 ########################################################################################
 #######Interpolator functions###################
 
+def filter_by_expression(filter_expression, layer):
+    QgsMessageLog.logMessage(f"Filtering layer by {filter_expression}", 'vol test', Qgis.Info)
+    layer.setSubsetString(filter_expression)
+
+
 def interpolator(self, cmbInterpolationLayer, cmbInterpolationField, cmbInterpolationType, lnOutputInter, 
                  spbResolution, spbWeight, lnInterFilter):
     output_path = lnOutputInter.text()
@@ -267,9 +279,10 @@ def interpolator(self, cmbInterpolationLayer, cmbInterpolationField, cmbInterpol
     
     if lnInterFilter.currentText() != '':
         QgsMessageLog.logMessage("Filtering needed", 'vol test', Qgis.Info)
-        layer.setSubsetString(lnInterFilter.asExpression())
+        filter_by_expression(lnInterFilter.currentText(), layer)
     else:
         QgsMessageLog.logMessage("No filtering needed", 'vol test', Qgis.Info)
+    
     fields = layer.fields()
     idxField = fields.indexFromName(field)
     inter_type = cmbInterpolationType.currentText()

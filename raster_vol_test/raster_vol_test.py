@@ -350,12 +350,12 @@ class RasterTester:
 
     def interpolation_tab(self):
         QgsMessageLog.logMessage('Interpolation button pressed', 'vol test', Qgis.Info)
-        interpolator(self, self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField,
-                    self.dlg.cmbInterpolationType, self.dlg.lnOutputInter, self.dlg.spbResolution,
-                    self.dlg.spbWeight, self.dlg.lnInterFilter)
+        if self.dlg.chkInterpolation.isChecked():
+            interpolator(self, self.dlg.cmbInterpolationLayer, self.dlg.cmbInterpolationField,
+                        self.dlg.cmbInterpolationType, self.dlg.lnOutputInter, self.dlg.spbResolution,
+                        self.dlg.spbWeight, self.dlg.lnInterFilter)
         if self.dlg.chkSymbology.isChecked():
-            symbolized_map(self, self.dlg.cmbInterpolationLayer, self.dlg.cmbFieldValue, self.dlg.cmbGradMeth, 
-                           self.dlg.spbNumClass, self.dlg.cmbSymType, self.dlg.cmbXMag, self.dlg.cmbYMag, self.dlg.spbScale)
+            symbolized_map(self, self.dlg.cmbInterpolationLayer, self.dlg.cmbFieldValue, self.dlg.cmbGradMeth, self.dlg.spbNumClass, self.dlg.cmbSymType, self.dlg.cmbXMag, self.dlg.cmbYMag, self.dlg.spbScale, self.dlg.lnInterFilter)
         self.dlg.close()
                 
     def populate_fields(self, cmbPopulator, cmbPopulated, QgsFilter = None):
@@ -388,6 +388,7 @@ class RasterTester:
     def unique_field_values(self, cmbLayerPopulator, cmbFieldPopulator, cmbPopulated):
         layer = cmbLayerPopulator.currentLayer()
         field_name = cmbFieldPopulator.currentField()
+        cmbPopulated.clear()
         unique_values = set()
         if layer:
             for feature in layer.getFeatures():
@@ -431,6 +432,11 @@ class RasterTester:
             lnWdgt.clear()
         for tblWdgt in tblWdgts:
             tblWdgt.clearContents()
+
+    def clear_filters(self, filter_box, layer):
+        filter_box.setExpression('')
+        if layer:
+            layer.setSubsetString('')
 
     def connect_filter(self, cmbLayer, lnFilter, cmbField = False):
         lnFilter.setLayer(cmbLayer.currentLayer())
@@ -481,6 +487,7 @@ class RasterTester:
             #Interpolation actions
             self.dlg.btnInterpolation.accepted.connect(self.interpolation_tab)
             self.dlg.btnInterpolation.rejected.connect(self.close_dialog)
+            
 
             # Populate fields for Layout Tabs
             self.dlg.cmbInterpolationLayer.layerChanged.connect(lambda: self.populate_fields(self.dlg.cmbInterpolationLayer, self.dlg.cmbFieldValue,
@@ -544,7 +551,10 @@ class RasterTester:
         self.dlg.chkSymbology.clicked.connect(lambda: self.enable_exceptions(self.dlg.chkSymbology,  self.dlg.cmbSymType,
                                                                              [self.dlg.cmbFieldValue, self.dlg.cmbGradMeth, self.dlg.spbNumClass],
                                                                                [self.dlg.cmbXMag, self.dlg.cmbYMag, self.dlg.spbScale]))
+        self.dlg.chkInterpolation.clicked.connect(lambda: self.enable_button(self.dlg.chkInterpolation, [self.dlg.cmbInterpolationType, self.dlg.spbWeight, 
+                                                                                                          self.dlg.spbResolution, self.dlg.lnOutputInter, self.dlg.btnOutputInter ]))
         self.dlg.cmbInterpolationType.currentTextChanged.connect(lambda: self.enable_weight(self.dlg.cmbInterpolationType))
+        self.dlg.btnClearFilter.clicked.connect(lambda: self.clear_filters(self.dlg.lnInterFilter, self.dlg.cmbInterpolationLayer.currentLayer()))
         
         #Show the dialogue
         self.dlg.show()
