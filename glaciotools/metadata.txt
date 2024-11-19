@@ -3,17 +3,17 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=Raster Tester
+name=GlacioTools
 qgisMinimumVersion=3.0
-description=Raster Volume Tester
-version=0.1
-author=Simona
-email=lacacariza@mail.com
+description=This plugin facilitates data processing for glacier monitoring, including elevation difference, field interpolation, and GCP monographies.
+version=1.0
+author=Sebastian Fajardo Turner
+email=sfajardoturner97@gmail.com
 
-about=Tester
+about=The plugin aims to ease data processing for glacier monitoring. It has three tabs which work independently, and facilitate elevation or volume change based on DSMs, field interpolation and symbology application, and creation of GCP monographies.
 
-tracker=http://bugs.com
-repository=http://repo.com
+tracker=https://github.com/sfajardot/qgis-thesis/issues
+repository=https://github.com/sfajardot/qgis-thesis
 # End of mandatory metadata
 
 # Recommended items:
@@ -23,9 +23,9 @@ hasProcessingProvider=no
 # changelog=
 
 # Tags are comma separated with spaces allowed
-tags=python
+tags=python, DSM, glacier, GCP, interpolation
 
-homepage=http://homepage.com
+homepage=https://github.com/sfajardot/qgis-thesis
 category=Plugins
 icon=icon.png
 # experimental flag
