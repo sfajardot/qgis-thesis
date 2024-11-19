@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>RasterTesterDialogBase</class>
- <widget class="QDialog" name="RasterTesterDialogBase">
+ <class>GlacioToolsDialogBase</class>
+ <widget class="QDialog" name="GlacioToolsDialogBase">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Raster Tester</string>
+   <string>GlacioTools</string>
   </property>
   <widget class="QTabWidget" name="tabWidget">
    <property name="geometry">
@@ -1588,7 +1588,7 @@
   <connection>
    <sender>btnProcess</sender>
    <signal>accepted()</signal>
-   <receiver>RasterTesterDialogBase</receiver>
+   <receiver>GlacioToolsDialogBase</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -1604,7 +1604,7 @@
   <connection>
    <sender>btnProcess</sender>
    <signal>rejected()</signal>
-   <receiver>RasterTesterDialogBase</receiver>
+   <receiver>GlacioToolsDialogBase</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">

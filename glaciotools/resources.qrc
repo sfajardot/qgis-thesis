@@ -1,5 +1,5 @@
 <RCC>
-    <qresource prefix="/plugins/raster_vol_test" >
+    <qresource prefix="/plugins/glaciotools" >
         <file>icon.png</file>
     </qresource>
 </RCC>
